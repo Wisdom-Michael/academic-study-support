@@ -108,7 +108,6 @@ a:hover { color: var(--teal-900); }
   display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
   background: var(--gold-500); color: var(--teal-900);
 }
-.icon-button.sidebar-close { display: none; color: #fff; background: none; box-shadow: none; }
 
 .profile { text-align: center; padding: 1.75rem 1rem 1.5rem 0; }
 .profile .avatar { margin: 0 auto 0.75rem; box-shadow: 0 0 0 3px var(--teal-800), 0 0 0 5px var(--gold-500); }
@@ -141,7 +140,6 @@ a:hover { color: var(--teal-900); }
 }
 .sidenav-signout:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 
-.scrim { position: fixed; inset: 0; background: rgba(11, 30, 28, 0.45); z-index: 25; }
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
@@ -151,7 +149,6 @@ a:hover { color: var(--teal-900); }
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
-.icon-button.menu-button { display: none; }
 .topbar-search {
   display: flex; align-items: center; gap: 0.5rem; flex: 0 1 22rem;
   background: var(--surface); border-radius: 999px; padding: 0 1rem; color: var(--ink-3);
@@ -594,7 +591,7 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 /* ---------------------------------------------------------------------
    Sign in and register
    --------------------------------------------------------------------- */
-.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; }
+.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; /* dvh: the visible height on iOS Safari */ }
 .auth-panel {
   position: relative; overflow: hidden; background: var(--teal-800); color: var(--sidebar-ink);
   padding: 3rem clamp(2rem, 6vw, 5rem); display: flex; flex-direction: column; justify-content: center;
@@ -627,39 +624,52 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 .role-option:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------------
-   Phone-only pieces (shown by the phone layer below)
+   Phone and tablet navigation: a drop-down menu in the top bar
+   (shown by the responsive layers below; desktop uses the sidebar)
    --------------------------------------------------------------------- */
-.tabbar, .topbar-brand, .search-cancel, .show-phone { display: none; }
+.topbar-brand, .search-cancel, .show-phone, .nav-menu { display: none; }
 .icon-button.search-toggle { display: none; }
 
-.tab {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2rem;
-  border: none; background: none; padding: 0.4rem 0 0.3rem; font: inherit; font-size: 0.6875rem; font-weight: 600;
-  color: var(--ink-3); text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+.nav-menu { position: relative; }
+.nav-menu-toggle {
+  display: flex; align-items: center; gap: 0.3rem; min-height: 40px; padding: 4px 10px 4px 4px;
+  border: none; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow);
+  color: var(--ink-2); cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.tab-icon { position: relative; display: grid; place-items: center; width: 56px; height: 30px; border-radius: 999px; transition: background 0.2s; }
-.tab.active { color: var(--teal-800); }
-.tab.active .tab-icon { background: var(--teal-100); }
-.tab-badge {
-  position: absolute; top: -2px; right: 8px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
-  background: var(--risk-high); color: #fff; font-size: 0.625rem; font-weight: 700; line-height: 17px; text-align: center;
-  box-shadow: 0 0 0 2px var(--surface);
+.nav-menu-chevron { transition: transform 0.15s ease; }
+.nav-menu-toggle[aria-expanded='true'] .nav-menu-chevron { transform: rotate(180deg); }
+.nav-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 50;
+  width: min(20rem, calc(100vw - 1.5rem));
+  background: var(--surface); border-radius: 16px; padding: 0.5rem;
+  box-shadow: 0 14px 40px rgba(11, 30, 28, 0.18), 0 0 0 1px var(--line);
+  animation: menu-in 0.15s ease-out;
 }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.nav-menu-account {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.75rem; margin-bottom: 0.25rem; border-bottom: 1px solid var(--line);
+}
+.nav-menu-account > div { flex: 1; min-width: 0; }
+.nav-menu-account .person-meta { overflow-wrap: anywhere; }
+.nav-menu-links { display: flex; flex-direction: column; gap: 2px; padding: 0.25rem 0; }
+.nav-menu-links a, .nav-menu-signout {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 48px; padding: 0 0.75rem;
+  border: none; border-radius: 10px; background: none; font: inherit; font-weight: 600; font-size: 0.9375rem;
+  color: var(--ink); text-decoration: none; cursor: pointer; text-align: left;
+}
+.nav-menu-links a svg, .nav-menu-signout svg { color: var(--ink-3); flex: none; }
+.nav-menu-links a:hover, .nav-menu-signout:hover { background: var(--surface-2); }
+.nav-menu-links a.active { background: var(--teal-50); color: var(--teal-800); }
+.nav-menu-links a.active svg { color: var(--teal-700); }
+.nav-menu-count {
+  margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: var(--risk-high); color: #fff; font-size: 0.75rem; font-weight: 700; line-height: 22px; text-align: center;
+}
+.nav-menu-signout { margin-top: 0.25rem; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; color: var(--ink-2); }
 
-.sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-  background: var(--surface); border-radius: 22px 22px 0 0;
-  padding: 0.6rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
-  box-shadow: 0 -10px 40px rgba(11, 30, 28, 0.2);
-  animation: sheet-up 0.22s ease-out;
-}
-.sheet-handle { display: block; width: 40px; height: 4px; border-radius: 999px; background: var(--line); margin: 0 auto 1rem; }
-.sheet-profile { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
-.sheet-profile .person-meta { margin: 0.1rem 0 0.4rem; }
-.sheet-close { display: block; margin: 0.5rem auto 0; min-height: 44px; }
-.scrim-sheet { z-index: 55; animation: fade-in 0.2s ease-out; }
-@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Anchor targets land below the sticky top bar instead of under it */
+.concept-check, .alerts-card { scroll-margin-top: 88px; }
 
 .back-link {
   align-items: center; gap: 0.2rem; min-height: 44px; margin: 0 0 0.25rem -0.3rem;
@@ -675,13 +685,15 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 }
 
 @media (max-width: 1024px) {
-  .sidebar {
-    position: fixed; left: 0; top: 0; bottom: 0; height: auto;
-    transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: none;
-  }
-  .sidebar-open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, 0.25); }
-  .icon-button.sidebar-close, .icon-button.menu-button { display: inline-grid; }
+  /* Navigation moves from the sidebar into the top bar's drop-down */
+  .sidebar, .topbar-user { display: none; }
+  .nav-menu { display: block; }
+  .topbar-brand { display: inline-flex; flex: none; font-size: 1rem; color: var(--ink); }
+  .topbar-brand:hover { color: var(--ink); }
+  .topbar-brand .brand-mark { width: 32px; height: 32px; border-radius: 9px; }
   .topbar { padding: 0.75rem 1rem; }
+  /* iOS Safari zooms into any text field smaller than 16px when it's tapped */
+  input, select, textarea { font-size: 16px; }
   .content { padding: 0.25rem 1rem 3rem; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-main, .reader { grid-template-columns: minmax(0, 1fr); }
@@ -747,38 +759,24 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 
 /* =====================================================================
    Phones: a dedicated layout, not a squeezed desktop.
-   - Navigation moves to a bottom tab bar; profile and sign-out to an account sheet.
-   - Hidden: page descriptions, actions the tab bar already covers, secondary
+   - Navigation is the top bar's drop-down (account, pages, sign-out).
+   - Hidden: page descriptions, actions the menu already covers, secondary
      metadata (file icons, uploader, timestamps, emails), and table detail until tapped.
    - Tighter: type scale, card padding, gaps and tiles.
    - Bigger: tap targets (44px+), quiz answers, and the reading-progress bar.
    ===================================================================== */
 @media (max-width: 640px) {
-  :root { --tabbar-height: 64px; }
   body { font-size: 0.875rem; }
   .hide-phone { display: none !important; }
   .show-phone { display: inline; }
   .back-link.show-phone { display: inline-flex; }
 
-  /* Navigation */
-  .sidebar, .scrim-menu, .icon-button.menu-button { display: none; }
-  .tabbar {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
-    height: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: var(--surface); border-top: 1px solid var(--line);
-    box-shadow: 0 -4px 16px rgba(14, 42, 40, 0.06);
-  }
-
-  /* Top bar: brand mark, search icon, bell. The search field takes the whole bar when opened. */
-  .topbar { padding: 0.5rem 1rem; gap: 0.5rem; min-height: 56px; }
-  .topbar-brand { display: inline-flex; }
-  .topbar-brand .brand-mark { width: 32px; height: 32px; border-radius: 9px; }
-  .topbar-search, .topbar-user { display: none; }
+  /* Top bar: brand, search icon, bell and the menu. The search field takes the whole bar when opened. */
+  .topbar { padding: 0.5rem 0.875rem; gap: 0.5rem; min-height: 56px; }
+  .topbar-search { display: none; }
   .icon-button.search-toggle { display: inline-grid; }
-  .topbar .icon-button { width: 38px; height: 38px; }
-  .topbar .bell { display: none; } /* the first tab already carries the count */
+  .topbar-right { gap: 0.5rem; }
+  .topbar .icon-button { width: 40px; height: 40px; }
   .topbar-searching .topbar-brand, .topbar-searching .topbar-right { display: none; }
   .topbar-searching .topbar-search { display: flex; flex: 1; padding-right: 0.25rem; }
   .topbar-searching .search-cancel {
@@ -787,7 +785,7 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   }
 
   /* Page frame */
-  .content { padding: 0.25rem 0.875rem calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 1.5rem); }
+  .content { padding: 0.25rem 0.875rem calc(env(safe-area-inset-bottom) + 2rem); }
   h1 { font-size: 1.25rem; }
   h2 { font-size: 0.9375rem; }
   .page-header { margin: 0.5rem 0 0.875rem; align-items: center; flex-wrap: nowrap; }
@@ -834,10 +832,9 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   .person-end { width: 100%; margin-left: calc(36px + 0.75rem); justify-content: space-between; }
   .person-end .button-gold, .person-end .button-secondary { flex: none; }
 
-  /* Course materials: module filter scrolls sideways instead of wrapping */
+  /* Course materials: module filters wrap onto more lines, so none are hidden off-screen */
   .filter-bar { padding: 0.625rem; gap: 0.625rem; margin-bottom: 0.875rem; }
-  .segmented { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
-  .segmented::-webkit-scrollbar { display: none; }
+  .filter-bar .segmented { border-radius: 18px; width: 100%; }
   .material-cards { gap: 0.625rem; }
   /* Title block on top; progress and the open button share one row underneath */
   .material-card { grid-template-columns: minmax(0, 1fr) auto; padding: 0.875rem 1rem; gap: 0.6rem 1rem; border-radius: 16px; }
@@ -867,8 +864,7 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   .prose pre code { font-size: 0.75rem; }
   .prose table { font-size: 0.8125rem; }
   .tracker {
-    bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
-    margin: 0 -0.875rem; padding: 0.6rem 0.875rem;
+    margin: 0 -0.875rem; padding: 0.6rem 0.875rem calc(0.6rem + env(safe-area-inset-bottom));
     border-radius: 16px 16px 0 0; flex-wrap: nowrap;
   }
   .tracker .milestones { display: flex; gap: 0.25rem; }
@@ -908,12 +904,12 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   .alert-status { grid-column: 1 / -1; max-width: none; }
   .alert-status > span { display: none; }
 
-  /* Sign in: a short brand header with the form card overlapping it */
-  .auth-panel { padding: 4.25rem 1.25rem 2.75rem; }
+  /* Sign in: a short brand header, then the form below it */
+  .auth-panel { padding: 4.25rem 1.25rem 1.75rem; }
   .auth-panel .brand { top: 1.25rem; left: 1.25rem; }
   .auth-panel h1 { font-size: 1.5rem; margin: 0; }
   .auth-orb { width: 180px; height: 180px; top: -100px; right: -60px; }
-  .auth-side { align-items: flex-start; padding: 0 0.875rem 2rem; margin-top: -1.5rem; position: relative; }
+  .auth-side { align-items: flex-start; padding: 1rem 0.875rem calc(2rem + env(safe-area-inset-bottom)); }
   .auth-card { padding: 1.25rem; border-radius: 20px; }
   .auth-card h2 { font-size: 1.25rem; }
   .role-option { font-size: 0.75rem; padding: 0.7rem 0.25rem; }
@@ -921,12 +917,19 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 
 /* Very narrow phones (≤ 380px): the overview banner stacks its figures under the headline */
 @media (max-width: 380px) {
+  .topbar-brand-name { display: none; } /* the logo alone leaves room for search, bell and menu */
   .feature-card { grid-template-columns: minmax(0, 1fr); }
   .feature-stats { justify-content: flex-start; margin-top: 0.75rem; }
   .hero-figure { display: flex; align-items: baseline; gap: 0.6rem; }
   .hero-figure span { max-width: none; margin: 0; }
   .donut-figure svg { width: 100px; height: 100px; }
   .donut-value { font-size: 1.125rem; }
+}
+
+/* Short screens (phones held sideways): pinned bars would cover too much of the page */
+@media (max-height: 500px) {
+  .topbar { position: static; }
+  .tracker { position: static; margin: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow); }
 }
 
 @media (prefers-reduced-motion: reduce) {

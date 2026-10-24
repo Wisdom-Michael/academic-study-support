@@ -1,7 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, Bell, BookOpen, CircleUserRound, GraduationCap, LayoutDashboard, LogOut, Menu, Search, Users, X,
+  Activity, Bell, BookOpen, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Search, Users,
 } from 'lucide-react';
 import { api } from '../api';
 import { homePathFor, roleLabel, useAuth, useUser } from '../auth';
@@ -11,7 +11,7 @@ import { Avatar } from './ui';
 interface NavItem {
   to: string;
   label: string;
-  short: string; // label in the phone tab bar
+  short: string; // label in the phone/tablet drop-down
   icon: typeof LayoutDashboard;
 }
 
@@ -25,7 +25,7 @@ const navItems: Record<Role, NavItem[]> = {
     { to: '/materials', label: 'Course materials', short: 'Materials', icon: BookOpen },
   ],
   faculty_admin: [
-    { to: '/lecturer', label: 'Student risk', short: 'Risk', icon: Activity },
+    { to: '/lecturer', label: 'Student risk', short: 'Student risk', icon: Activity },
     { to: '/materials', label: 'Course materials', short: 'Materials', icon: BookOpen },
   ],
 };
@@ -52,19 +52,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);        // tablet: slide-out sidebar
-  const [accountOpen, setAccountOpen] = useState(false);  // phone: account sheet
-  const [searchOpen, setSearchOpen] = useState(false);    // phone: expanded search field
+  const [menuOpen, setMenuOpen] = useState(false);     // phone/tablet drop-down
+  const [searchOpen, setSearchOpen] = useState(false); // phone: expanded search field
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
-  const sheetClose = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const notifications = useNotifications(user.role);
   const home = homePathFor(user.role);
   const items = navItems[user.role];
 
   useEffect(() => {
     setMenuOpen(false);
-    setAccountOpen(false);
     setSearchOpen(false);
   }, [location.pathname]);
 
@@ -72,14 +70,20 @@ export default function Layout({ children }: { children: ReactNode }) {
     if (searchOpen) searchInput.current?.focus();
   }, [searchOpen]);
 
-  // The account sheet behaves like a dialog: focus moves in, Escape closes it
+  // The drop-down closes on a tap outside it or on Escape
   useEffect(() => {
-    if (!accountOpen) return;
-    sheetClose.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAccountOpen(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [accountOpen]);
+    if (!menuOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
@@ -100,16 +104,13 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="app">
       <a className="skip-link" href="#main">Skip to content</a>
 
-      {/* Desktop and tablet navigation */}
-      <aside className={`sidebar${menuOpen ? ' sidebar-open' : ''}`} aria-label="Main navigation">
+      {/* Desktop navigation */}
+      <aside className="sidebar" aria-label="Main navigation">
         <div className="sidebar-brand">
           <Link to={home} className="brand">
             <span className="brand-mark"><GraduationCap size={18} strokeWidth={2.4} aria-hidden="true" /></span>
             Study Support
           </Link>
-          <button type="button" className="icon-button sidebar-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
-            <X size={20} />
-          </button>
         </div>
 
         <div className="profile">
@@ -133,15 +134,12 @@ export default function Layout({ children }: { children: ReactNode }) {
           Sign out
         </button>
       </aside>
-      {menuOpen && <div className="scrim scrim-menu" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
 
       <div className="main">
         <header className={`topbar${searchOpen ? ' topbar-searching' : ''}`}>
-          <button type="button" className="icon-button menu-button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
-            <Menu size={22} />
-          </button>
-          <Link to={home} className="brand topbar-brand" aria-label="Study Support home">
+          <Link to={home} className="brand topbar-brand">
             <span className="brand-mark"><GraduationCap size={16} strokeWidth={2.4} aria-hidden="true" /></span>
+            <span className="topbar-brand-name">Study Support</span>
           </Link>
           <form className="topbar-search" role="search" onSubmit={handleSearch}>
             <Search size={16} aria-hidden="true" />
@@ -169,58 +167,54 @@ export default function Layout({ children }: { children: ReactNode }) {
               <Avatar name={user.fullName} size="sm" />
               <span className="topbar-name">{user.fullName}</span>
             </span>
+
+            {/* Phone and tablet navigation: a drop-down with the account, pages and sign-out */}
+            <div className="nav-menu" ref={menuRef}>
+              <button
+                type="button"
+                className="nav-menu-toggle"
+                aria-expanded={menuOpen}
+                aria-controls="nav-menu-panel"
+                onClick={() => setMenuOpen(!menuOpen)}
+              >
+                <Avatar name={user.fullName} size="sm" />
+                <span className="sr-only">Menu</span>
+                <ChevronDown size={16} aria-hidden="true" className="nav-menu-chevron" />
+              </button>
+              {menuOpen && (
+                <div id="nav-menu-panel" className="nav-menu-panel">
+                  <div className="nav-menu-account">
+                    <Avatar name={user.fullName} />
+                    <div>
+                      <p className="person-name">{user.fullName}</p>
+                      <p className="person-meta">{user.email}</p>
+                    </div>
+                    <span className="pill pill-active">{roleLabel[user.role]}</span>
+                  </div>
+                  <nav className="nav-menu-links" aria-label="Main navigation">
+                    {items.map(({ to, short, icon: Icon }, index) => (
+                      <NavLink key={to} to={to} onClick={() => setMenuOpen(false)}>
+                        <Icon size={19} strokeWidth={2} aria-hidden="true" />
+                        <span>{short}</span>
+                        {index === 0 && notifications > 0 && (
+                          <span className="nav-menu-count" aria-label={notificationLabel}>{notifications}</span>
+                        )}
+                      </NavLink>
+                    ))}
+                  </nav>
+                  <button type="button" className="nav-menu-signout" onClick={signOut}>
+                    <LogOut size={19} aria-hidden="true" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main id="main" className="content">
           {children}
         </main>
       </div>
-
-      {/* Phone navigation: a tab bar within thumb reach */}
-      <nav className="tabbar" aria-label="Main navigation">
-        {items.map(({ to, short, icon: Icon }, index) => (
-          <NavLink key={to} to={to} className="tab">
-            <span className="tab-icon">
-              <Icon size={21} strokeWidth={2} aria-hidden="true" />
-              {index === 0 && notifications > 0 && <span className="tab-badge" aria-label={notificationLabel}>{notifications}</span>}
-            </span>
-            {short}
-          </NavLink>
-        ))}
-        <button
-          type="button"
-          className={`tab${accountOpen ? ' active' : ''}`}
-          onClick={() => setAccountOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={accountOpen}
-        >
-          <span className="tab-icon"><CircleUserRound size={21} strokeWidth={2} aria-hidden="true" /></span>
-          Account
-        </button>
-      </nav>
-
-      {accountOpen && (
-        <>
-          <div className="scrim scrim-sheet" onClick={() => setAccountOpen(false)} aria-hidden="true" />
-          <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="account-sheet-title">
-            <span className="sheet-handle" aria-hidden="true" />
-            <div className="sheet-profile">
-              <Avatar name={user.fullName} size="lg" />
-              <div>
-                <p className="person-name" id="account-sheet-title">{user.fullName}</p>
-                <p className="person-meta">{user.email}</p>
-                <span className="pill pill-active">{roleLabel[user.role]}</span>
-              </div>
-            </div>
-            <button type="button" className="button-secondary button-block" onClick={signOut}>
-              <LogOut size={17} aria-hidden="true" /> Sign out
-            </button>
-            <button type="button" ref={sheetClose} className="button-quiet sheet-close" onClick={() => setAccountOpen(false)}>
-              Close
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }
