@@ -11,6 +11,20 @@ The code goes from **GitHub** to Render, which rebuilds the site automatically e
 
 Uploaded course materials are stored in the database, because Render's free plan wipes its own disk on every restart.
 
+## The live site
+
+| | |
+|---|---|
+| Address | <https://study-support-r7do.onrender.com> |
+| Render service | `study-support` (free plan, Frankfurt) |
+| Aiven database | `study-support-db` in project `michaelwisdom014-9b13` (free plan, DigitalOcean Frankfurt) |
+| Code | <https://github.com/Wisdom-Michael/academic-study-support> (private); pushing to `main` redeploys |
+
+The database password and certificate are stored only in the Render service's
+**Environment** settings (`DATABASE_URL`, `DB_SSL_CA`).
+
+The steps below are how this was set up, if it ever needs to be done again.
+
 ---
 
 ## 1. Create the database on Aiven
