@@ -1,0 +1,20 @@
+{
+  "name": "academic-study-support",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Integrated Academic Study Support System: React + Express + MySQL",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "db:init": "npm run db:init --prefix server",
+    "dev": "concurrently -n server,client -c blue,yellow \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client",
+    "build": "npm install --include=dev --prefix server && npm install --include=dev --prefix client && npm run build --prefix client && npm run build --prefix server",
+    "start": "node server/dist/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

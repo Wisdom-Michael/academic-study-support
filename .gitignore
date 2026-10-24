@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+
+# Uploaded course materials (the seed files are kept)
+server/uploads/*
+!server/uploads/seed/

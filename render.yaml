@@ -1,0 +1,30 @@
+# Render Blueprint: one free web service that serves both the React app and the API.
+# The MySQL database is hosted separately (Aiven's free plan); see DEPLOYMENT.md.
+services:
+  - type: web
+    name: study-support
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      # Signs login tokens; Render generates a random value once
+      - key: JWT_SECRET
+        generateValue: true
+      # Aiven's "Service URI": mysql://avnadmin:<password>@<host>:<port>/defaultdb?ssl-mode=REQUIRED
+      - key: DATABASE_URL
+        sync: false
+      # Aiven's CA certificate (paste the whole PEM, including the BEGIN/END lines)
+      - key: DB_SSL_CA
+        sync: false
+      # Password for the demo accounts, instead of the published Study@2026
+      - key: DEMO_PASSWORD
+        sync: false
+      # Optional: Claude API key, for generating concept checks from uploads
+      - key: ANTHROPIC_API_KEY
+        sync: false
