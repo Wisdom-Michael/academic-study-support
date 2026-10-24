@@ -20,6 +20,8 @@ export default function MentorDashboard() {
   const pending = byStatus('pending');
   const active = byStatus('active');
   const completed = byStatus('completed');
+  // Until matches arrive, show placeholders rather than zeros that read as real results
+  const loaded = matches.data !== null;
 
   async function updateMatch(match: Match, status: MatchStatus) {
     setBusyId(match.matchId);
@@ -82,13 +84,14 @@ export default function MentorDashboard() {
       />
 
       <div className="stat-row">
-        <StatTile tone="gold" icon={Inbox} label="Waiting for you" value={pending.length}
-          detail={pending.length === 1 ? 'request to accept' : 'requests to accept'} />
-        <StatTile tone="teal" icon={UserCheck} label="Supporting now" value={active.length}
-          detail={active.length === 1 ? 'student in an active match' : 'students in active matches'} />
-        <StatTile tone="navy" icon={CheckCircle2} label="Finished" value={completed.length} detail="students mentored" />
+        <StatTile tone="gold" icon={Inbox} label="Waiting for you" value={loaded ? pending.length : '–'}
+          detail={!loaded ? 'Loading…' : pending.length === 1 ? 'request to accept' : 'requests to accept'} />
+        <StatTile tone="teal" icon={UserCheck} label="Supporting now" value={loaded ? active.length : '–'}
+          detail={!loaded ? 'Loading…' : active.length === 1 ? 'student in an active match' : 'students in active matches'} />
+        <StatTile tone="navy" icon={CheckCircle2} label="Finished" value={loaded ? completed.length : '–'}
+          detail={loaded ? 'students mentored' : 'Loading…'} />
         <StatTile tone="plain" icon={BookMarked} label="Modules" value={myModules.data?.length ?? '–'}
-          detail={(myModules.data ?? []).map((m) => m.moduleCode).join(', ') || 'none yet'} />
+          detail={!myModules.data ? 'Loading…' : myModules.data.map((m) => m.moduleCode).join(', ') || 'none yet'} />
       </div>
 
       {message && <Notice tone={message.tone}>{message.text}</Notice>}

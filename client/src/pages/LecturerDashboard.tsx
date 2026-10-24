@@ -141,7 +141,7 @@ export default function LecturerDashboard() {
           <ul className="feature-stats">
             {LEVELS.map((level) => (
               <li key={level}>
-                <strong>{counts[level]}</strong>
+                <strong>{risk.data ? counts[level] : '–'}</strong>
                 <span>{levelLabel[level]}</span>
               </li>
             ))}

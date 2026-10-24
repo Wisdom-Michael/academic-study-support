@@ -62,6 +62,10 @@ export default function StudentDashboard() {
   const averageScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
   const activeMentor = (matches.data ?? []).find((m) => m.status === 'active');
   const pendingMentor = (matches.data ?? []).find((m) => m.status === 'pending');
+  // Until the data arrives, show placeholders rather than zeros that read as real results
+  const loaded = materials.data !== null;
+  const mentorsLoaded = matches.data !== null;
+  const LOADING = '–';
 
   return (
     <>
@@ -74,16 +78,16 @@ export default function StudentDashboard() {
       {materials.error && <Notice tone="error">{materials.error}</Notice>}
 
       <div className="stat-row">
-        <StatTile tone="teal" icon={Clock} label="In progress" value={inProgress.length}
-          detail={inProgress.length === 1 ? 'chapter being read' : 'chapters being read'} />
+        <StatTile tone="teal" icon={Clock} label="In progress" value={loaded ? inProgress.length : LOADING}
+          detail={loaded ? (inProgress.length === 1 ? 'chapter being read' : 'chapters being read') : 'Loading…'} />
         <StatTile tone="gold" icon={Target} label="Average check score"
-          value={averageScore === null ? '–' : `${averageScore}%`}
-          detail={scores.length ? `across ${scores.length} concept check${scores.length === 1 ? '' : 's'}` : 'no checks taken yet'} />
-        <StatTile tone="navy" icon={CheckCircle2} label="Chapters finished" value={finished.length}
-          detail={`of ${all.length} available`} />
+          value={averageScore === null ? LOADING : `${averageScore}%`}
+          detail={!loaded ? 'Loading…' : scores.length ? `across ${scores.length} concept check${scores.length === 1 ? '' : 's'}` : 'no checks taken yet'} />
+        <StatTile tone="navy" icon={CheckCircle2} label="Chapters finished" value={loaded ? finished.length : LOADING}
+          detail={loaded ? `of ${all.length} available` : 'Loading…'} />
         <StatTile tone="plain" icon={Users} label="Peer mentor"
-          value={activeMentor ? activeMentor.mentor.fullName.split(' ')[0] : pendingMentor ? 'Requested' : 'None'}
-          detail={activeMentor ? `for ${activeMentor.moduleCode}` : pendingMentor ? `for ${pendingMentor.moduleCode}` : 'not needed so far'} />
+          value={!mentorsLoaded ? LOADING : activeMentor ? activeMentor.mentor.fullName.split(' ')[0] : pendingMentor ? 'Requested' : 'None'}
+          detail={!mentorsLoaded ? 'Loading…' : activeMentor ? `for ${activeMentor.moduleCode}` : pendingMentor ? `for ${pendingMentor.moduleCode}` : 'not needed so far'} />
       </div>
 
       <div className="grid-main">
@@ -114,7 +118,9 @@ export default function StudentDashboard() {
           </Card>
 
           <Card title="Concept check scores">
-            {checked.length === 0 ? (
+            {!loaded ? (
+              <p className="muted">Loading…</p>
+            ) : checked.length === 0 ? (
               <p className="muted">Finish a chapter and take its concept check to see your scores here.</p>
             ) : (
               <>
@@ -148,11 +154,14 @@ export default function StudentDashboard() {
         <div className="stack">
           <Card title="Peer mentoring">
             {matches.error && <Notice tone="error">{matches.error}</Notice>}
+            {!mentorsLoaded && !matches.error && <p className="muted">Loading…</p>}
             {matches.data && <MentorCard matches={matches.data} />}
           </Card>
 
           <Card title="Not started yet">
-            {notStarted.length === 0 ? (
+            {!loaded ? (
+              <p className="muted">Loading…</p>
+            ) : notStarted.length === 0 ? (
               <p className="muted">You’ve opened every chapter.</p>
             ) : (
               <ul className="link-list">
