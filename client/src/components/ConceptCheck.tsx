@@ -22,24 +22,24 @@ function MatchMessage({ result }: { result: GradeResult }) {
   if (match.status === 'created') {
     return (
       <Notice>
-        Your score is below {threshold}%, so we’ve asked <strong>{match.mentorName}</strong>, a peer
-        mentor for {moduleCode}, to support you. The match appears on your{' '}
-        <Link to="/student">dashboard</Link> and becomes active once they accept.
+        Your score is below {threshold}%, so we’ve found someone who can help with {moduleCode}
+        {match.helperSummary && <> ({match.helperSummary.charAt(0).toLowerCase() + match.helperSummary.slice(1)})</>} and
+        asked if they’re willing. You’ll both get a notification. Once you’ve both accepted, you’ll see each
+        other’s name and phone number under <Link to="/student#peer-help">Peer help</Link>.
       </Notice>
     );
   }
   if (match.status === 'already_matched') {
     return (
       <Notice>
-        You already have a peer mentor for {moduleCode}. Bring this chapter to your next session. Your{' '}
-        <Link to="/student">dashboard</Link> has their contact details.
+        You already have peer help for {moduleCode}. Bring this chapter to your next session; see{' '}
+        <Link to="/student#peer-help">Peer help</Link>.
       </Notice>
     );
   }
   return (
     <Notice>
-      No peer mentor for {moduleCode} has space right now. You’ll be matched automatically as soon as
-      one does, and the match will appear on your <Link to="/student">dashboard</Link>.
+      Nobody who’s doing well in {moduleCode} is free to help right now. We’ll notify you as soon as someone is.
     </Notice>
   );
 }

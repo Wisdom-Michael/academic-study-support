@@ -1,12 +1,18 @@
 import { Router } from 'express';
-import { execute, query } from '../db';
+import { execute, pool, query } from '../db';
 import { currentUser, requireRole } from '../middleware/auth';
-import { matchWaitingStudents } from '../services/matching';
-import { HttpError, MatchStatus } from '../types';
+import { matchWaitingStudents, recommendHelper } from '../services/matching';
+import { notify, peerHelpLink } from '../services/notifications';
+import { HttpError, MatchStatus, Role } from '../types';
 import { idParam, requireModuleCode } from '../validation';
+import { normalisePhone } from './profile';
 
 // ---------------------------------------------------------------------
-// /api/matches: peer-mentorship matches
+// /api/matches: peer help between a struggling student and a helper
+//
+// A match starts 'pending'. Each side accepts or declines from their dashboard.
+// Only when BOTH accept does it become 'active', and only then can each side see
+// the other's name, email and phone number. Either side can later mark it finished.
 // ---------------------------------------------------------------------
 export const matchesRouter = Router();
 
@@ -14,77 +20,202 @@ interface MatchRow {
   match_id: number;
   module_code: string;
   match_status: MatchStatus;
+  reason: string | null;
+  helper_summary: string | null;
+  student_accepted_at: Date | null;
+  helper_accepted_at: Date | null;
+  created_at: Date | null;
   student_id: number;
   student_name: string;
   student_email: string;
-  mentor_id: number;
-  mentor_name: string;
-  mentor_email: string;
+  student_phone: string | null;
+  helper_id: number;
+  helper_name: string;
+  helper_email: string;
+  helper_phone: string | null;
+  helper_role: Role;
 }
-
-const toMatch = (r: MatchRow) => ({
-  matchId: r.match_id,
-  moduleCode: r.module_code,
-  status: r.match_status,
-  student: { userId: r.student_id, fullName: r.student_name, email: r.student_email },
-  mentor: { userId: r.mentor_id, fullName: r.mentor_name, email: r.mentor_email },
-});
 
 const MATCH_SELECT = `
   SELECT pm.match_id, pm.module_code, pm.match_status,
+         md.reason, md.helper_summary, md.student_accepted_at, md.helper_accepted_at, md.created_at,
          s.user_id AS student_id, s.full_name AS student_name, s.institutional_email AS student_email,
-         m.user_id AS mentor_id,  m.full_name AS mentor_name,  m.institutional_email AS mentor_email
+         sp.phone_number AS student_phone,
+         h.user_id AS helper_id, h.full_name AS helper_name, h.institutional_email AS helper_email,
+         hp.phone_number AS helper_phone, h.role AS helper_role
     FROM peer_matches pm
+    LEFT JOIN match_details md ON md.match_id = pm.match_id
     JOIN users s ON s.user_id = pm.student_id
-    JOIN users m ON m.user_id = pm.mentor_id`;
+    JOIN users h ON h.user_id = pm.mentor_id
+    LEFT JOIN user_profiles sp ON sp.user_id = s.user_id
+    LEFT JOIN user_profiles hp ON hp.user_id = h.user_id`;
 const MATCH_ORDER = `ORDER BY FIELD(pm.match_status, 'pending', 'active', 'completed'), pm.match_id DESC`;
 
-// GET /api/matches: students see their own, mentors see theirs, faculty see all
+/** The match as one participant sees it: the other person stays anonymous until both accept. */
+function forViewer(r: MatchRow, viewerId: number) {
+  const myRole = r.student_id === viewerId ? 'student' : 'helper';
+  const iAccepted = Boolean(myRole === 'student' ? r.student_accepted_at : r.helper_accepted_at);
+  const theyAccepted = Boolean(myRole === 'student' ? r.helper_accepted_at : r.student_accepted_at);
+  const revealed = r.match_status !== 'pending';
+  const other = myRole === 'student'
+    ? { fullName: r.helper_name, email: r.helper_email, phoneNumber: r.helper_phone }
+    : { fullName: r.student_name, email: r.student_email, phoneNumber: r.student_phone };
+  return {
+    matchId: r.match_id,
+    moduleCode: r.module_code,
+    status: r.match_status,
+    myRole,
+    iAccepted,
+    theyAccepted,
+    // What each side knows before contact details are swapped
+    summary: myRole === 'student'
+      ? r.helper_summary ?? `A peer who can help with ${r.module_code}`
+      : r.reason ?? `Needs help with ${r.module_code}`,
+    contact: revealed ? other : null,
+    createdAt: r.created_at,
+  };
+}
+
+async function loadMatch(matchId: number): Promise<MatchRow> {
+  const [row] = await query<MatchRow>(`${MATCH_SELECT} WHERE pm.match_id = ?`, [matchId]);
+  if (!row) throw new HttpError(404, 'This match no longer exists.');
+  return row;
+}
+
+function sideOf(row: MatchRow, userId: number): 'student' | 'helper' {
+  if (row.student_id === userId) return 'student';
+  if (row.helper_id === userId) return 'helper';
+  throw new HttpError(403, 'This match is between two other people.');
+}
+
+// GET /api/matches: the signed-in user's matches (as the student needing help, as a helper, or both).
+// Lecturers get every match, with names only.
 matchesRouter.get('/', async (req, res) => {
   const user = currentUser(req);
-  let rows: MatchRow[];
-  if (user.role === 'student') {
-    rows = await query<MatchRow>(`${MATCH_SELECT} WHERE pm.student_id = ? ${MATCH_ORDER}`, [user.userId]);
-  } else if (user.role === 'mentor') {
-    rows = await query<MatchRow>(`${MATCH_SELECT} WHERE pm.mentor_id = ? ${MATCH_ORDER}`, [user.userId]);
-  } else {
-    rows = await query<MatchRow>(`${MATCH_SELECT} ${MATCH_ORDER}`);
+  if (user.role === 'faculty_admin') {
+    const rows = await query<MatchRow>(`${MATCH_SELECT} ${MATCH_ORDER}`);
+    return res.json({
+      matches: rows.map((r) => ({
+        matchId: r.match_id, moduleCode: r.module_code, status: r.match_status,
+        studentName: r.student_name, helperName: r.helper_name,
+      })),
+    });
   }
-  res.json({ matches: rows.map(toMatch) });
+  const rows = await query<MatchRow>(
+    `${MATCH_SELECT} WHERE pm.student_id = ? OR pm.mentor_id = ? ${MATCH_ORDER}`, [user.userId, user.userId],
+  );
+  res.json({ matches: rows.map((r) => forViewer(r, user.userId)) });
 });
 
-// Allowed status changes, made by the assigned mentor
-const NEXT_STATUS: Record<MatchStatus, MatchStatus | null> = {
-  pending: 'active',      // mentor accepts
-  active: 'completed',    // mentor marks the support as finished
-  completed: null,
-};
-
-// PATCH /api/matches/:id { status }
-matchesRouter.patch('/:id', requireRole('mentor'), async (req, res) => {
+// POST /api/matches/:id/respond { decision: 'accept' | 'decline', phoneNumber? }
+matchesRouter.post('/:id/respond', async (req, res) => {
+  const user = currentUser(req);
   const matchId = idParam(req.params.id);
-  const [match] = await query<MatchRow>(`${MATCH_SELECT} WHERE pm.match_id = ?`, [matchId]);
-  if (!match) throw new HttpError(404, 'This match no longer exists.');
-  if (match.mentor_id !== currentUser(req).userId) {
-    throw new HttpError(403, 'Only the assigned mentor can update this match.');
+  const match = await loadMatch(matchId);
+  const side = sideOf(match, user.userId);
+  if (match.match_status !== 'pending') throw new HttpError(400, 'This match has already been confirmed.');
+
+  const decision = req.body?.decision;
+  if (decision === 'accept') {
+    // Accepting means agreeing to share a phone number, so one must be on file
+    if (req.body?.phoneNumber !== undefined) {
+      await execute(
+        `INSERT INTO user_profiles (user_id, phone_number) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone_number = ?`,
+        [user.userId, normalisePhone(req.body.phoneNumber), normalisePhone(req.body.phoneNumber)],
+      );
+    }
+    const [profile] = await query<{ phone_number: string | null }>(
+      `SELECT phone_number FROM user_profiles WHERE user_id = ?`, [user.userId],
+    );
+    if (!profile?.phone_number) throw new HttpError(400, 'Add your phone number so the other student can contact you.');
+
+    const column = side === 'student' ? 'student_accepted_at' : 'helper_accepted_at';
+    await execute(
+      `INSERT INTO match_details (match_id, ${column}) VALUES (?, CURRENT_TIMESTAMP)
+       ON DUPLICATE KEY UPDATE ${column} = COALESCE(${column}, CURRENT_TIMESTAMP)`,
+      [matchId],
+    );
+
+    const updated = await loadMatch(matchId);
+    if (updated.student_accepted_at && updated.helper_accepted_at) {
+      // Both said yes: confirm the match and tell both who the other person is
+      await execute(`UPDATE peer_matches SET match_status = 'active' WHERE match_id = ?`, [matchId]);
+      await notify(updated.student_id, `You're matched for ${updated.module_code}`,
+        `You and ${updated.helper_name} both accepted. Their name and phone number are on your dashboard.`,
+        '/student#peer-help');
+      await notify(updated.helper_id, `You're matched for ${updated.module_code}`,
+        `You and ${updated.student_name} both accepted. Their name and phone number are on your dashboard.`,
+        peerHelpLink(updated.helper_role));
+    } else {
+      const otherId = side === 'student' ? updated.helper_id : updated.student_id;
+      const otherLink = side === 'student' ? peerHelpLink(updated.helper_role) : '/student#peer-help';
+      await notify(otherId, `Waiting for you: peer help in ${updated.module_code}`,
+        `The other ${side === 'student' ? 'student' : 'person'} has accepted. Accept too to swap names and phone numbers.`,
+        otherLink);
+    }
+    return res.json({ match: forViewer(await loadMatch(matchId), user.userId) });
   }
 
-  const requested = req.body?.status as MatchStatus;
-  if (NEXT_STATUS[match.match_status] !== requested) {
-    const article = match.match_status === 'active' ? 'An' : 'A';
-    throw new HttpError(400, `${article} ${match.match_status} match can't be changed to ${requested}.`);
+  if (decision === 'decline') {
+    // Forget the match, remember the pairing so it isn't suggested again
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query(
+        `INSERT INTO declined_matches (student_id, helper_id, module_code, declined_by) VALUES (?, ?, ?, ?)`,
+        [match.student_id, match.helper_id, match.module_code, side],
+      );
+      await connection.query(`DELETE FROM peer_matches WHERE match_id = ?`, [matchId]);
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+
+    if (side === 'helper') {
+      // Offer the student the next-best helper straight away
+      const next = await recommendHelper(match.student_id, match.module_code, match.reason ?? `Needs help with ${match.module_code}`);
+      if (next.status === 'no_helper_available') {
+        await notify(match.student_id, `Peer help for ${match.module_code}`,
+          'The helper we suggested isn’t available. We’ll let you know as soon as someone else is.',
+          '/student#peer-help');
+      }
+    } else {
+      await notify(match.helper_id, `No longer needed: ${match.module_code}`,
+        'The student you offered to help has decided not to go ahead. Thanks for offering.',
+        peerHelpLink(match.helper_role));
+    }
+    // The helper may have capacity for someone else now
+    await matchWaitingStudents(match.module_code);
+    return res.json({ ok: true });
   }
 
-  await execute(`UPDATE peer_matches SET match_status = ? WHERE match_id = ?`, [requested, matchId]);
-  // Finishing a match frees capacity, so check for students waiting in this module
-  if (requested === 'completed') await matchWaitingStudents(match.module_code);
+  throw new HttpError(400, 'Choose accept or decline.');
+});
 
-  const [updated] = await query<MatchRow>(`${MATCH_SELECT} WHERE pm.match_id = ?`, [matchId]);
-  res.json({ match: toMatch(updated) });
+// POST /api/matches/:id/complete: either side marks the help as finished
+matchesRouter.post('/:id/complete', async (req, res) => {
+  const user = currentUser(req);
+  const matchId = idParam(req.params.id);
+  const match = await loadMatch(matchId);
+  const side = sideOf(match, user.userId);
+  if (match.match_status !== 'active') throw new HttpError(400, 'Only a confirmed match can be marked as finished.');
+
+  await execute(`UPDATE peer_matches SET match_status = 'completed' WHERE match_id = ?`, [matchId]);
+  const otherId = side === 'student' ? match.helper_id : match.student_id;
+  const actorName = side === 'student' ? match.student_name : match.helper_name;
+  await notify(otherId, `Peer help finished: ${match.module_code}`,
+    `${actorName} marked your ${match.module_code} peer help as finished.`,
+    side === 'student' ? peerHelpLink(match.helper_role) : '/student#peer-help');
+  // Finishing frees the helper for another student in this module
+  await matchWaitingStudents(match.module_code);
+  res.json({ match: forViewer(await loadMatch(matchId), user.userId) });
 });
 
 // ---------------------------------------------------------------------
-// /api/mentor-modules: the modules a mentor can support
+// /api/mentor-modules: the modules a volunteer peer mentor can support
 // ---------------------------------------------------------------------
 export const mentorModulesRouter = Router();
 mentorModulesRouter.use(requireRole('mentor'));

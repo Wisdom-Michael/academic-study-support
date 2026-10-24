@@ -42,9 +42,9 @@ export interface ConceptCheck {
 }
 
 export interface MatchOutcome {
-  status: 'created' | 'already_matched' | 'no_mentor_available';
+  status: 'created' | 'already_matched' | 'no_helper_available';
   matchId?: number;
-  mentorName?: string;
+  helperSummary?: string;
 }
 
 export interface GradeResult {
@@ -69,12 +69,31 @@ interface Person {
   email: string;
 }
 
-export interface Match {
+/** A peer-help match as one of its two participants sees it. */
+export interface PeerMatch {
   matchId: number;
   moduleCode: string;
   status: MatchStatus;
-  student: Person;
-  mentor: Person;
+  myRole: 'student' | 'helper';   // 'student' = I'm getting help; 'helper' = I'm giving it
+  iAccepted: boolean;
+  theyAccepted: boolean;
+  summary: string;                // what I know about the other person before we both accept
+  contact: { fullName: string; email: string; phoneNumber: string | null } | null; // only once both accept
+  createdAt: string | null;
+}
+
+export interface Profile {
+  phoneNumber: string | null;
+  availableToHelp: boolean;
+}
+
+export interface AppNotification {
+  notificationId: number;
+  title: string;
+  body: string;
+  link: string | null;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface MentorModule {

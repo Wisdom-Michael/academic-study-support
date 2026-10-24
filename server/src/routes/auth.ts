@@ -5,6 +5,7 @@ import { execute, query } from '../db';
 import { currentUser, requireAuth, signToken } from '../middleware/auth';
 import { HttpError, Role } from '../types';
 import { requireText } from '../validation';
+import { normalisePhone } from './profile';
 
 const router = Router();
 const BCRYPT_ROUNDS = 10;
@@ -49,6 +50,9 @@ router.post('/register', async (req, res) => {
   if (role !== 'student' && role !== 'mentor') {
     throw new HttpError(400, 'You can register as a student or a peer mentor. Lecturer accounts are set up by the department.');
   }
+  // Optional; only ever shared with a peer once both have accepted a match
+  const rawPhone = typeof req.body?.phoneNumber === 'string' ? req.body.phoneNumber.trim() : '';
+  const phoneNumber = rawPhone ? normalisePhone(rawPhone) : null;
 
   const existing = await query<{ user_id: number }>(
     `SELECT user_id FROM users WHERE institutional_email = ?`, [email],
@@ -62,6 +66,9 @@ router.post('/register', async (req, res) => {
     `INSERT INTO users (full_name, institutional_email, password_hash, role) VALUES (?, ?, ?, ?)`,
     [fullName, email, passwordHash, role],
   );
+  if (phoneNumber) {
+    await execute(`INSERT INTO user_profiles (user_id, phone_number) VALUES (?, ?)`, [result.insertId, phoneNumber]);
+  }
 
   const session = await startSession({
     user_id: result.insertId, full_name: fullName, institutional_email: email, password_hash: passwordHash, role,

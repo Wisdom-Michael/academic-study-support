@@ -12,6 +12,7 @@ export default function Register() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [role, setRole] = useState<'student' | 'mentor'>('student');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +22,7 @@ export default function Register() {
     setSubmitting(true);
     setError(null);
     try {
-      const user = await register({ fullName, email, password, role });
+      const user = await register({ fullName, email, password, role, phoneNumber });
       navigate(homePathFor(user.role), { replace: true });
     } catch (err) {
       setError(errorMessage(err));
@@ -70,6 +71,18 @@ export default function Register() {
             required
           />
           <small id="password-hint">At least 8 characters.</small>
+        </label>
+        <label className="field">
+          <span>Phone number <span className="muted">(optional)</span></span>
+          <input
+            type="tel"
+            autoComplete="tel"
+            inputMode="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            aria-describedby="phone-hint"
+          />
+          <small id="phone-hint">Only shared with a classmate when you both agree to peer help.</small>
         </label>
 
         <button type="submit" className="button button-primary button-block" disabled={submitting}>

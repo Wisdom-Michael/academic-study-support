@@ -54,5 +54,7 @@ export const config = {
 
   // Business rules, kept here so they are easy to find and explain
   matchScoreThreshold: 50,      // concept-check scores below this trigger peer matching
+  helperScoreThreshold: 75,     // average module score that makes a student a suggested helper
+  studentHelperCapacity: 2,     // students a helper can be asked to support at once
   maxUploadBytes: 20 * 1024 * 1024,
 };

@@ -1,4 +1,5 @@
 import { execute, query } from '../db';
+import { notify } from './notifications';
 import { RiskLevel } from '../types';
 
 /**
@@ -212,6 +213,11 @@ export async function syncRiskAlerts(risks: StudentRisk[]): Promise<void> {
          VALUES (?, ?, ?, 'unresolved')`,
         [risk.studentId, risk.riskLevel, reason],
       );
+      // Tell every lecturer a new alert needs reviewing
+      const lecturers = await query<{ user_id: number }>(`SELECT user_id FROM users WHERE role = 'faculty_admin'`);
+      for (const l of lecturers) {
+        await notify(l.user_id, `New ${risk.riskLevel}-risk alert: ${risk.fullName}`, reason, '/lecturer#alerts');
+      }
     }
   }
 }

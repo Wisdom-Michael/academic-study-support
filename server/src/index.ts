@@ -13,6 +13,7 @@ import authRoutes from './routes/auth';
 import materialRoutes from './routes/materials';
 import conceptCheckRoutes from './routes/conceptChecks';
 import { matchesRouter, mentorModulesRouter } from './routes/matches';
+import { notificationsRouter, profileRouter } from './routes/profile';
 import analyticsRoutes from './routes/analytics';
 
 const app = express();
@@ -41,6 +42,8 @@ app.use('/api/materials/:materialId/concept-check', conceptCheckRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/matches', matchesRouter);
 app.use('/api/mentor-modules', mentorModulesRouter);
+app.use('/api/profile', profileRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/analytics', analyticsRoutes);
 
 app.use('/api', (_req, _res) => {

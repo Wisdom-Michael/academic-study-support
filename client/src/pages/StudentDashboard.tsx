@@ -4,51 +4,19 @@ import { api } from '../api';
 import { useUser } from '../auth';
 import { daysAgo } from '../format';
 import { useLoad } from '../hooks';
-import { Match, Material } from '../types';
+import { Material, PeerMatch, Profile } from '../types';
 import { MeterBar } from '../components/charts';
 import Notice from '../components/Notice';
-import { Avatar, Card, PageHeader, Pill, StatTile } from '../components/ui';
+import PeerHelp from '../components/PeerHelp';
+import { Card, PageHeader, StatTile } from '../components/ui';
 
 const PASS_THRESHOLD = 50;
-
-function MentorCard({ matches }: { matches: Match[] }) {
-  if (matches.length === 0) {
-    return (
-      <p className="muted">
-        If you score below {PASS_THRESHOLD}% on a concept check, you’ll be matched with a peer
-        mentor for that module.
-      </p>
-    );
-  }
-  return (
-    <ul className="people">
-      {matches.map((match) => (
-        <li key={match.matchId} className="person">
-          <Avatar name={match.mentor.fullName} />
-          <div className="person-body">
-            <p className="person-name">{match.mentor.fullName}</p>
-            <p className="person-meta">
-              {match.status === 'active' && <a href={`mailto:${match.mentor.email}`}>{match.mentor.email}</a>}
-              {match.status === 'pending' && 'Contact details appear once they accept'}
-              {match.status === 'completed' && 'Mentoring finished'}
-            </p>
-          </div>
-          <div className="person-end">
-            <span className="module-tag">{match.moduleCode}</span>
-            <Pill tone={match.status === 'active' ? 'active' : match.status === 'pending' ? 'pending' : 'done'}>
-              {match.status === 'active' ? 'Active' : match.status === 'pending' ? 'Requested' : 'Finished'}
-            </Pill>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export default function StudentDashboard() {
   const user = useUser();
   const materials = useLoad(() => api<{ materials: Material[] }>('/materials').then((r) => r.materials), []);
-  const matches = useLoad(() => api<{ matches: Match[] }>('/matches').then((r) => r.matches), []);
+  const matches = useLoad(() => api<{ matches: PeerMatch[] }>('/matches').then((r) => r.matches), []);
+  const profile = useLoad(() => api<{ profile: Profile }>('/profile').then((r) => r.profile), []);
 
   const all = materials.data ?? [];
   const started = all.filter((m) => m.progress);
@@ -60,8 +28,12 @@ export default function StudentDashboard() {
   const notStarted = all.filter((m) => !m.progress);
   const scores = checked.map((m) => m.progress!.scoreAchieved!);
   const averageScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  const activeMentor = (matches.data ?? []).find((m) => m.status === 'active');
-  const pendingMentor = (matches.data ?? []).find((m) => m.status === 'pending');
+  // Peer-help status for the tile: getting help first, then helping others
+  const peer = matches.data ?? [];
+  const helpedBy = peer.find((m) => m.myRole === 'student' && m.status === 'active');
+  const helpOffer = peer.find((m) => m.myRole === 'student' && m.status === 'pending');
+  const helpingCount = peer.filter((m) => m.myRole === 'helper' && m.status !== 'completed').length;
+  const needsAnswer = peer.filter((m) => m.status === 'pending' && !m.iAccepted).length;
   // Until the data arrives, show placeholders rather than zeros that read as real results
   const loaded = materials.data !== null;
   const mentorsLoaded = matches.data !== null;
@@ -85,9 +57,19 @@ export default function StudentDashboard() {
           detail={!loaded ? 'Loading…' : scores.length ? `across ${scores.length} concept check${scores.length === 1 ? '' : 's'}` : 'no checks taken yet'} />
         <StatTile tone="navy" icon={CheckCircle2} label="Chapters finished" value={loaded ? finished.length : LOADING}
           detail={loaded ? `of ${all.length} available` : 'Loading…'} />
-        <StatTile tone="plain" icon={Users} label="Peer mentor"
-          value={!mentorsLoaded ? LOADING : activeMentor ? activeMentor.mentor.fullName.split(' ')[0] : pendingMentor ? 'Requested' : 'None'}
-          detail={!mentorsLoaded ? 'Loading…' : activeMentor ? `for ${activeMentor.moduleCode}` : pendingMentor ? `for ${pendingMentor.moduleCode}` : 'not needed so far'} />
+        <StatTile tone="plain" icon={Users} label="Peer help"
+          value={!mentorsLoaded ? LOADING
+            : needsAnswer ? `${needsAnswer} to answer`
+            : helpedBy ? helpedBy.contact?.fullName.split(' ')[0] ?? 'Matched'
+            : helpOffer ? 'Waiting'
+            : helpingCount ? `Helping ${helpingCount}`
+            : 'None'}
+          detail={!mentorsLoaded ? 'Loading…'
+            : needsAnswer ? 'see Peer help below'
+            : helpedBy ? `is helping you with ${helpedBy.moduleCode}`
+            : helpOffer ? `for ${helpOffer.moduleCode}`
+            : helpingCount ? (helpingCount === 1 ? 'classmate' : 'classmates')
+            : 'not needed so far'} />
       </div>
 
       <div className="grid-main">
@@ -145,17 +127,25 @@ export default function StudentDashboard() {
                     );
                   })}
                 </ul>
-                <p className="chart-note"><span className="threshold-key" aria-hidden="true" /> The line marks {PASS_THRESHOLD}%. Scores below it bring in a peer mentor.</p>
+                <p className="chart-note"><span className="threshold-key" aria-hidden="true" /> The line marks {PASS_THRESHOLD}%. Scores below it offer you help from a classmate.</p>
               </>
             )}
           </Card>
         </div>
 
         <div className="stack">
-          <Card title="Peer mentoring">
+          <Card title="Peer help" id="peer-help">
             {matches.error && <Notice tone="error">{matches.error}</Notice>}
             {!mentorsLoaded && !matches.error && <p className="muted">Loading…</p>}
-            {matches.data && <MentorCard matches={matches.data} />}
+            {matches.data && (
+              <PeerHelp
+                matches={matches.data}
+                profile={profile.data}
+                onChanged={() => { matches.reload(); profile.reload(); }}
+                onProfileChanged={profile.setData}
+                showAvailability
+              />
+            )}
           </Card>
 
           <Card title="Not started yet">

@@ -198,7 +198,7 @@ export default function LecturerDashboard() {
           </ul>
           {overview.data && (
             <p className="chart-note">
-              Peer mentoring: {overview.data.matches.active} active, {overview.data.matches.pending} waiting for a mentor to accept.
+              Peer help: {overview.data.matches.active} matched, {overview.data.matches.pending} waiting for both students to accept.
             </p>
           )}
         </Card>

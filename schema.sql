@@ -130,6 +130,53 @@ CREATE TABLE material_files (
     FOREIGN KEY (material_id) REFERENCES course_materials (material_id) ON DELETE CASCADE
 );
 
+-- Contact details shared with a peer once both sides accept a match, and whether
+-- a student who is doing well may be asked to help others.
+CREATE TABLE user_profiles (
+  user_id           INT PRIMARY KEY,
+  phone_number      VARCHAR(30) NULL,
+  available_to_help TINYINT(1) NOT NULL DEFAULT 1,
+  CONSTRAINT fk_profiles_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+-- Each peer match's context and each side's answer. peer_matches.match_status stays
+-- 'pending' until both have accepted, then becomes 'active'.
+CREATE TABLE match_details (
+  match_id            INT PRIMARY KEY,
+  reason              VARCHAR(255) NULL,   -- why the student needs help (shown to the helper)
+  helper_summary      VARCHAR(255) NULL,   -- why this helper (shown to the student)
+  student_accepted_at TIMESTAMP NULL,
+  helper_accepted_at  TIMESTAMP NULL,
+  created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_details_match FOREIGN KEY (match_id) REFERENCES peer_matches (match_id) ON DELETE CASCADE
+);
+
+-- Pairings someone declined, so the same two people aren't suggested again.
+CREATE TABLE declined_matches (
+  decline_id  INT AUTO_INCREMENT PRIMARY KEY,
+  student_id  INT NOT NULL,
+  helper_id   INT NOT NULL,
+  module_code VARCHAR(20) NOT NULL,
+  declined_by ENUM('student', 'helper') NOT NULL,
+  declined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_declined_pair (student_id, module_code),
+  CONSTRAINT fk_declined_student FOREIGN KEY (student_id) REFERENCES users (user_id) ON DELETE CASCADE,
+  CONSTRAINT fk_declined_helper FOREIGN KEY (helper_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+-- In-app notifications shown under the bell in the top bar.
+CREATE TABLE notifications (
+  notification_id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id         INT NOT NULL,
+  title           VARCHAR(200) NOT NULL,
+  body            TEXT NOT NULL,
+  link            VARCHAR(255) NULL,
+  is_read         TINYINT(1) NOT NULL DEFAULT 0,
+  created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_notifications_user (user_id, is_read, created_at),
+  CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
 -- Every successful login, used for the login-frequency risk factor.
 CREATE TABLE login_events (
   event_id     INT AUTO_INCREMENT PRIMARY KEY,
@@ -266,9 +313,35 @@ INSERT INTO milestone_progress (student_id, material_id, completion_percentage, 
   (8, 3, 100.00, 100, NOW() - INTERVAL 1 DAY),
   (8, 4,  90.00,  75, NOW() - INTERVAL 1 DAY);
 
-INSERT INTO peer_matches (student_id, mentor_id, module_code, match_status) VALUES
-  (5, 2, 'CS201', 'pending'),
-  (7, 2, 'CS220', 'active');
+INSERT INTO peer_matches (match_id, student_id, mentor_id, module_code, match_status) VALUES
+  (1, 5, 2, 'CS201', 'pending'),   -- Fatima has accepted Priya's help; Priya hasn't answered yet
+  (2, 7, 2, 'CS220', 'active');    -- Grace and Priya both accepted, so they can see each other's details
+
+INSERT INTO match_details (match_id, reason, helper_summary, student_accepted_at, helper_accepted_at, created_at) VALUES
+  (1, 'Scored 25% on “Asymptotic analysis and Big-O notation”', 'Volunteer peer mentor for CS201',
+      NOW() - INTERVAL 1 DAY, NULL, NOW() - INTERVAL 1 DAY),
+  (2, 'Scored 25% on “Normalisation from 1NF to BCNF”', 'Volunteer peer mentor for CS220',
+      NOW() - INTERVAL 6 DAY, NOW() - INTERVAL 5 DAY, NOW() - INTERVAL 6 DAY);
+
+-- Phone numbers use the UK's reserved fictional range (07700 900xxx)
+INSERT INTO user_profiles (user_id, phone_number, available_to_help) VALUES
+  (2, '+44 7700 900102', 1),
+  (3, '+44 7700 900103', 1),
+  (4, '+44 7700 900104', 1),
+  (5, '+44 7700 900105', 1),
+  (7, '+44 7700 900107', 1),
+  (8, '+44 7700 900108', 1);
+
+INSERT INTO notifications (user_id, title, body, link, is_read, created_at) VALUES
+  (5, 'Peer help for CS201',
+      'A volunteer peer mentor for CS201 can help you. You have accepted; once they accept too, you will see each other''s name and phone number.',
+      '/student#peer-help', 1, NOW() - INTERVAL 1 DAY),
+  (2, 'Can you help a CS201 student?',
+      'A CS201 student scored 25% on “Asymptotic analysis and Big-O notation”. Accept to swap names and phone numbers; nothing is shared until you both agree.',
+      '/mentor#peer-help', 0, NOW() - INTERVAL 1 DAY),
+  (7, 'You''re matched for CS220',
+      'You and Priya Raman both accepted. Their name and phone number are on your dashboard.',
+      '/student#peer-help', 1, NOW() - INTERVAL 5 DAY);
 
 INSERT INTO login_events (user_id, logged_in_at) VALUES
   (4, NOW() - INTERVAL 1 DAY), (4, NOW() - INTERVAL 2 DAY), (4, NOW() - INTERVAL 3 DAY),

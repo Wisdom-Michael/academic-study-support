@@ -669,7 +669,60 @@ fieldset:disabled .option:hover { border-color: var(--line); }
 .nav-menu-signout { margin-top: 0.25rem; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; color: var(--ink-2); }
 
 /* Anchor targets land below the sticky top bar instead of under it */
-.concept-check, .alerts-card { scroll-margin-top: 88px; }
+.concept-check, .alerts-card, .card[id] { scroll-margin-top: 88px; }
+
+/* ---------------------------------------------------------------------
+   Notifications (the bell)
+   --------------------------------------------------------------------- */
+.notif-menu { position: relative; }
+.notif-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 50;
+  width: min(23rem, calc(100vw - 1.5rem)); max-height: min(70vh, 34rem); overflow-y: auto;
+  background: var(--surface); border-radius: 16px; padding: 0.5rem;
+  box-shadow: 0 14px 40px rgba(11, 30, 28, 0.18), 0 0 0 1px var(--line);
+  animation: menu-in 0.15s ease-out;
+}
+.notif-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.5rem 0.75rem 0.6rem; border-bottom: 1px solid var(--line); }
+.notif-head h2 { margin: 0; font-size: 0.9375rem; }
+.notif-head .button-quiet { font-size: 0.8125rem; min-height: 32px; }
+.notif-empty { padding: 1rem 0.75rem; margin: 0; font-size: 0.875rem; }
+.notif-list { list-style: none; margin: 0; padding: 0.25rem 0 0; }
+.notif-item {
+  position: relative; display: flex; flex-direction: column; gap: 0.15rem; width: 100%;
+  padding: 0.7rem 0.75rem 0.7rem 1.5rem; border: none; border-radius: 10px; background: none;
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+}
+.notif-item:hover { background: var(--surface-2); }
+.notif-unread { background: var(--teal-50); }
+.notif-unread::before { content: ''; position: absolute; left: 0.6rem; top: 1.05rem; width: 7px; height: 7px; border-radius: 50%; background: var(--teal-600); }
+.notif-title { font-weight: 700; font-size: 0.875rem; }
+.notif-body { font-size: 0.8125rem; color: var(--ink-2); }
+.notif-time { font-size: 0.75rem; color: var(--ink-3); }
+
+/* ---------------------------------------------------------------------
+   Peer help
+   --------------------------------------------------------------------- */
+.peer-help { display: flex; flex-direction: column; gap: 1rem; }
+.peer-privacy { display: flex; align-items: center; gap: 0.5rem; margin: 0; padding: 0.6rem 0.8rem; border-radius: var(--radius); background: var(--teal-50); color: var(--teal-800); font-size: 0.8125rem; font-weight: 600; }
+.peer-privacy svg { flex: none; }
+.peer-group h3 { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; font-size: 0.875rem; }
+.peer-group h3 svg { color: var(--teal-700); }
+.peer-group > .muted { font-size: 0.8125rem; margin: 0; }
+.peer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.peer-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem 0.9rem; }
+.peer-item-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.peer-summary { margin: 0 0 0.6rem; font-size: 0.875rem; }
+.peer-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.peer-actions .muted { font-size: 0.8125rem; flex: 1 1 12rem; }
+.contact-card { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.6rem; }
+.contact-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.contact-line { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; min-height: 28px; }
+.accept-form { margin-top: 0.25rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.accept-form .field { margin-bottom: 0.5rem; }
+.accept-note { display: flex; gap: 0.4rem; align-items: flex-start; font-size: 0.8125rem; margin: 0 0 0.75rem; }
+.accept-note svg { flex: none; margin-top: 2px; color: var(--teal-700); }
+.availability { margin: 0; font-size: 0.8125rem; align-items: flex-start; }
+.availability input[type='checkbox'] { accent-color: var(--teal-800); width: 1.1rem; height: 1.1rem; margin-top: 1px; flex: none; }
 
 .back-link {
   align-items: center; gap: 0.2rem; min-height: 44px; margin: 0 0 0.25rem -0.3rem;
@@ -778,6 +831,8 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   .topbar-right { gap: 0.5rem; }
   .topbar .icon-button { width: 40px; height: 40px; }
   .topbar-searching .topbar-brand, .topbar-searching .topbar-right { display: none; }
+  /* The bell isn't at the screen edge, so its panel spans the screen instead of hanging off one side */
+  .notif-panel { position: fixed; top: 60px; left: 0.75rem; right: 0.75rem; width: auto; }
   .topbar-searching .topbar-search { display: flex; flex: 1; padding-right: 0.25rem; }
   .topbar-searching .search-cancel {
     display: block; border: none; background: none; color: var(--teal-700);

@@ -1,11 +1,12 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, Bell, BookOpen, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Search, Users,
+  Activity, BookOpen, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Search, Users,
 } from 'lucide-react';
 import { api } from '../api';
 import { homePathFor, roleLabel, useAuth, useUser } from '../auth';
-import { Match, RiskAlert, Role } from '../types';
+import { RiskAlert, Role } from '../types';
+import NotificationsMenu from './NotificationsMenu';
 import { Avatar } from './ui';
 
 interface NavItem {
@@ -30,21 +31,37 @@ const navItems: Record<Role, NavItem[]> = {
   ],
 };
 
-/** Things waiting for this user: new mentor requests, or unreviewed risk alerts. */
-function useNotifications(role: Role) {
+/** Lecturers: how many early-warning alerts haven't been reviewed (shown on the Student risk link). */
+function useAlertCount(role: Role) {
   const [count, setCount] = useState(0);
   const location = useLocation();
   useEffect(() => {
+    if (role !== 'faculty_admin') return;
     let cancelled = false;
-    const load = role === 'mentor'
-      ? api<{ matches: Match[] }>('/matches').then((r) => r.matches.filter((m) => m.status === 'pending').length)
-      : role === 'faculty_admin'
-        ? api<{ alerts: RiskAlert[] }>('/analytics/alerts').then((r) => r.alerts.filter((a) => a.resolutionStatus === 'unresolved').length)
-        : Promise.resolve(0);
-    load.then((n) => { if (!cancelled) setCount(n); }).catch(() => {});
+    api<{ alerts: RiskAlert[] }>('/analytics/alerts')
+      .then((r) => { if (!cancelled) setCount(r.alerts.filter((a) => a.resolutionStatus === 'unresolved').length); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [role, location.pathname]);
   return count;
+}
+
+/** Scroll to #section links (e.g. /student#peer-help) once the section has loaded. */
+function useHashScroll() {
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el || ++tries > 30) {
+        window.clearInterval(timer);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [location.pathname, location.hash, location.key]);
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -57,7 +74,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const notifications = useNotifications(user.role);
+  const notifications = useAlertCount(user.role);
+  useHashScroll();
   const home = homePathFor(user.role);
   const items = navItems[user.role];
 
@@ -96,9 +114,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     navigate('/login');
   }
 
-  const notificationLabel = user.role === 'mentor'
-    ? `${notifications} new mentoring request${notifications === 1 ? '' : 's'}`
-    : `${notifications} unreviewed alert${notifications === 1 ? '' : 's'}`;
+  const notificationLabel = `${notifications} unreviewed alert${notifications === 1 ? '' : 's'}`;
 
   return (
     <div className="app">
@@ -157,12 +173,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <button type="button" className="icon-button search-toggle" onClick={() => setSearchOpen(true)} aria-label="Search course materials">
               <Search size={19} />
             </button>
-            {user.role !== 'student' && (
-              <Link to={user.role === 'mentor' ? '/mentor' : '/lecturer#alerts'} className="icon-button bell" aria-label={notificationLabel}>
-                <Bell size={20} aria-hidden="true" />
-                {notifications > 0 && <span className="bell-count" aria-hidden="true">{notifications}</span>}
-              </Link>
-            )}
+            <NotificationsMenu />
             <span className="topbar-user">
               <Avatar name={user.fullName} size="sm" />
               <span className="topbar-name">{user.fullName}</span>

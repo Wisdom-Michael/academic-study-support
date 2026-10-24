@@ -163,19 +163,27 @@ account, the page says which type to choose.
 
 ## How the key algorithms work
 
-### Peer-mentorship matching (`server/src/services/matching.ts`)
+### Peer help (`server/src/services/matching.ts`, `server/src/routes/matches.ts`)
 
 Runs whenever a student submits a concept check scoring **below 50%**:
 
 1. If the student already has a pending or active match for that module, stop.
-2. Find every mentor registered for the module (`mentor_modules`).
-3. Exclude mentors already at capacity (pending + active ≥ `max_active_matches`).
-4. Choose the mentor with the fewest open matches, so work is shared evenly.
-5. Insert a `pending` row in `peer_matches`. The mentor accepts it (`active`) and later
-   marks it finished (`completed`).
+2. Look for a **student doing well in that module**: an average concept-check score of at
+   least 75% there, highest first, then the least busy. Skip anyone who has switched off
+   "Ask me to help", is already helping 2 people, or was declined for this student before.
+3. If no student is free, fall back to a **volunteer peer mentor** registered for the module.
+4. Insert a `pending` row in `peer_matches` and **notify both people** (the bell in the top bar).
+   Each sees only an anonymous summary: the student sees "Averages 88% on CS201 concept checks",
+   the helper sees "Scored 25% on Big-O".
+5. Each side **accepts or declines**. Accepting requires a phone number on file. Only when
+   **both** have accepted does the match become `active` and each side see the other's name,
+   email and phone number. Either side can later mark it `completed`.
+6. If the helper declines, the next-best helper is offered automatically and the pairing is
+   never suggested again. If the student declines, they aren't offered help in that module
+   again until they score below 50% there again.
 
-If no mentor has space, the student is matched automatically later, when a mentor adds that
-module or finishes a match.
+Students waiting without a helper are matched automatically later, when someone scores 75%+ in
+the module, a mentor adds it, or a match finishes or is declined.
 
 ### Concept checks from uploaded material (`server/src/services/questionGenerator.ts`)
 
@@ -217,7 +225,7 @@ alerts. Resolving an alert silences that student until their risk level gets wor
 `schema.sql` creates the five tables from the project specification, unchanged:
 `users`, `course_materials`, `milestone_progress`, `peer_matches` and `risk_alerts`.
 
-Four supporting tables were added so the modules work end to end:
+Supporting tables were added so the modules work end to end:
 
 | Table | Why it's needed |
 |---|---|
@@ -225,6 +233,11 @@ Four supporting tables were added so the modules work end to end:
 | `quiz_questions` | The questions, answer options (JSON), correct answer and explanation |
 | `login_events` | One row per sign-in, for the login-frequency risk factor |
 | `mentor_modules` | Which modules each mentor supports, and how many students they'll take at once |
+| `material_files` | Uploaded files, stored in the database so hosted copies keep them across restarts |
+| `user_profiles` | Phone number (shared only after both sides accept a match) and the "ask me to help" setting |
+| `match_details` | Each match's context and each side's acceptance; a match is active only once both accept |
+| `declined_matches` | Pairings someone declined, so they aren't suggested again |
+| `notifications` | In-app notifications shown under the bell |
 
 `milestone_progress` also has a `UNIQUE (student_id, material_id)` constraint, so progress
 can be upserted with a single `INSERT … ON DUPLICATE KEY UPDATE`.
@@ -250,8 +263,12 @@ All endpoints except `/api/auth/*` and `/api/health` need an `Authorization: Bea
 | POST | `/api/materials/:id/concept-check/submit` | Student | Grade answers; triggers matching below 50% |
 | POST | `/api/materials/:id/concept-check/questions` | Lecturer or uploader | Add a question by hand |
 | POST | `/api/materials/:id/concept-check/generate` | Lecturer or uploader | Generate `count` (5–20) questions from the file; `replaceExisting` swaps out the current ones |
-| GET | `/api/matches` | Signed in | Own matches (all matches for lecturers) |
-| PATCH | `/api/matches/:id` | Assigned mentor | Accept (`active`) or finish (`completed`) |
+| GET | `/api/matches` | Signed in | Own matches, as the student getting help or the helper (all matches, names only, for lecturers). The other person's contact details appear only once both have accepted |
+| POST | `/api/matches/:id/respond` | Either side of the match | `{ decision: "accept" \| "decline", phoneNumber? }` |
+| POST | `/api/matches/:id/complete` | Either side of the match | Mark a confirmed match as finished |
+| GET / PUT | `/api/profile` | Signed in | Phone number and the "ask me to help" setting |
+| GET | `/api/notifications` | Signed in | Latest notifications and the unread count |
+| POST | `/api/notifications/read` | Signed in | Mark some (`ids`) or all as read |
 | GET / POST / DELETE | `/api/mentor-modules` | Mentor | Modules the mentor supports |
 | GET | `/api/analytics/risk` | Lecturer | Recompute risk index for all students |
 | GET | `/api/analytics/students/:id` | Lecturer | One student's activity timeline |

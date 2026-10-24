@@ -3,7 +3,7 @@ import { RowDataPacket } from 'mysql2/promise';
 import { config } from '../config';
 import { execute, pool, query } from '../db';
 import { currentUser, requireRole } from '../middleware/auth';
-import { matchStudentWithMentor, MatchOutcome } from '../services/matching';
+import { matchWaitingStudents, MatchOutcome, recommendHelper } from '../services/matching';
 import { GeneratedQuestion, generateQuestions, MAX_QUESTIONS, MIN_QUESTIONS } from '../services/questionGenerator';
 import { HttpError } from '../types';
 import { extensionOf, readMaterialFile } from '../uploads';
@@ -29,8 +29,8 @@ const parseOptions = (options: string[] | string): string[] =>
   typeof options === 'string' ? JSON.parse(options) : options;
 
 async function findCheck(materialId: number) {
-  const [check] = await query<{ check_id: number; title: string; module_code: string }>(
-    `SELECT cc.check_id, cc.title, cm.module_code
+  const [check] = await query<{ check_id: number; title: string; module_code: string; material_title: string }>(
+    `SELECT cc.check_id, cc.title, cm.module_code, cm.title AS material_title
        FROM concept_checks cc
        JOIN course_materials cm ON cm.material_id = cc.material_id
       WHERE cc.material_id = ?`,
@@ -108,7 +108,11 @@ router.post('/submit', requireRole('student'), async (req, res) => {
   // 3. Below the threshold: run the peer-mentorship matching algorithm
   let match: MatchOutcome | null = null;
   if (score < config.matchScoreThreshold) {
-    match = await matchStudentWithMentor(student.userId, check.module_code);
+    // Struggling: recommend a classmate who is doing well in this module
+    match = await recommendHelper(student.userId, check.module_code, `Scored ${score}% on “${check.material_title}”`);
+  } else if (score >= config.helperScoreThreshold) {
+    // Doing well: this student may now be the helper someone in the module is waiting for
+    await matchWaitingStudents(check.module_code);
   }
 
   res.json({
