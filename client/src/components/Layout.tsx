@@ -188,8 +188,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                     <div>
                       <p className="person-name">{user.fullName}</p>
                       <p className="person-meta">{user.email}</p>
+                      <span className="pill pill-active">{roleLabel[user.role]}</span>
                     </div>
-                    <span className="pill pill-active">{roleLabel[user.role]}</span>
                   </div>
                   <nav className="nav-menu-links" aria-label="Main navigation">
                     {items.map(({ to, short, icon: Icon }, index) => (

@@ -651,7 +651,7 @@ fieldset:disabled .option:hover { border-color: var(--line); }
   padding: 0.75rem; margin-bottom: 0.25rem; border-bottom: 1px solid var(--line);
 }
 .nav-menu-account > div { flex: 1; min-width: 0; }
-.nav-menu-account .person-meta { overflow-wrap: anywhere; }
+.nav-menu-account .person-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.35rem; }
 .nav-menu-links { display: flex; flex-direction: column; gap: 2px; padding: 0.25rem 0; }
 .nav-menu-links a, .nav-menu-signout {
   display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 48px; padding: 0 0.75rem;
