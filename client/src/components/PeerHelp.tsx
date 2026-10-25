@@ -6,10 +6,11 @@ import Notice from './Notice';
 import { Avatar, Pill } from './ui';
 
 /**
- * Peer help: students who are struggling in a module are offered help from a classmate
- * who is doing well in it. Both get a notification; names, emails and phone numbers are
- * only exchanged once BOTH accept.
+ * Peer help: students who are struggling in a module are offered a peer tutor, a classmate
+ * who is doing well in it. Both see each other's name from the start and get a notification;
+ * phone numbers and emails are only exchanged once BOTH accept.
  */
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 interface PeerHelpProps {
   matches: PeerMatch[];
   profile: Profile | null;
@@ -27,23 +28,34 @@ function statusPill(m: PeerMatch) {
   return m.iAccepted ? <Pill tone="neutral">Waiting for them</Pill> : <Pill tone="pending">Waiting for you</Pill>;
 }
 
-function ContactCard({ contact }: { contact: NonNullable<PeerMatch['contact']> }) {
+/** Who the match is with: their name always, their phone and email once both have accepted. */
+function PersonCard({ match }: { match: PeerMatch }) {
+  const { contact } = match;
   return (
     <div className="contact-card">
-      <Avatar name={contact.fullName} />
+      <Avatar name={match.otherName} />
       <div className="contact-body">
-        <p className="person-name">{contact.fullName}</p>
-        {contact.phoneNumber && (
+        <p className="person-name">{match.otherName}</p>
+        <p className="person-meta">{match.otherName.split(' ')[0]} {lowerFirst(match.summary)}.</p>
+        {contact?.phoneNumber && (
           <a href={`tel:${contact.phoneNumber.replace(/[^\d+]/g, '')}`} className="contact-line">
             <Phone size={15} aria-hidden="true" /> {contact.phoneNumber}
           </a>
         )}
-        <a href={`mailto:${contact.email}`} className="contact-line">
-          <Mail size={15} aria-hidden="true" /> {contact.email}
-        </a>
+        {contact && (
+          <a href={`mailto:${contact.email}`} className="contact-line">
+            <Mail size={15} aria-hidden="true" /> {contact.email}
+          </a>
+        )}
       </div>
     </div>
   );
+}
+
+function matchSentence(match: PeerMatch) {
+  return match.myRole === 'student'
+    ? <>This match is between you and your peer tutor, <strong>{match.otherName}</strong>.</>
+    : <>This match is between you and <strong>{match.otherName}</strong>. You’d be their peer tutor.</>;
 }
 
 function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: Profile | null; onChanged: () => void }) {
@@ -51,7 +63,7 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
   const [phone, setPhone] = useState(profile?.phoneNumber ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const other = match.myRole === 'student' ? 'them' : 'the student';
+  const firstName = match.otherName.split(' ')[0];
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -74,10 +86,10 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
 
   function decline() {
     const question = match.iAccepted
-      ? 'Withdraw from this match? Nothing has been shared yet.'
+      ? `Withdraw from this match with ${match.otherName}? Your phone number and email haven’t been shared.`
       : match.myRole === 'student'
-        ? 'Decline this offer of help? We won’t suggest this person again.'
-        : 'Decline this request? We’ll offer the student someone else.';
+        ? `Decline ${match.otherName} as your peer tutor? We won’t suggest them again.`
+        : `Decline tutoring ${match.otherName}? We’ll suggest another peer tutor to them.`;
     if (!window.confirm(question)) return;
     run(() => api(`/matches/${match.matchId}/respond`, { method: 'POST', body: { decision: 'decline' } }));
   }
@@ -89,11 +101,8 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
         {statusPill(match)}
       </div>
 
-      {match.contact ? (
-        <ContactCard contact={match.contact} />
-      ) : (
-        <p className="peer-summary">{match.summary}</p>
-      )}
+      <p className="peer-sentence">{matchSentence(match)}</p>
+      <PersonCard match={match} />
 
       {error && <Notice tone="error">{error}</Notice>}
 
@@ -123,7 +132,7 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
             />
           </label>
           <p className="muted accept-note">
-            <ShieldCheck size={15} aria-hidden="true" /> Your name, email and phone number are shared with {other} only
+            <ShieldCheck size={15} aria-hidden="true" /> Your phone number and email are shared with {firstName} only
             once you have both accepted.
           </p>
           <div className="peer-actions">
@@ -137,7 +146,7 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
 
       {match.status === 'pending' && match.iAccepted && (
         <div className="peer-actions">
-          <span className="muted">You’ve accepted. Their details appear here once they accept too.</span>
+          <span className="muted">You’ve accepted. {firstName}’s phone number and email appear here once they accept too.</span>
           <button type="button" className="button-quiet" onClick={decline} disabled={busy}>Withdraw</button>
         </div>
       )}
@@ -182,15 +191,15 @@ export default function PeerHelp({ matches, profile, onChanged, showGettingHelp 
   return (
     <div className="peer-help">
       <p className="peer-privacy">
-        <ShieldCheck size={16} aria-hidden="true" /> Names and phone numbers are only shared once both of you accept.
+        <ShieldCheck size={16} aria-hidden="true" /> Phone numbers and emails are only shared once both of you accept.
       </p>
 
       {showGettingHelp && (
         <div className="peer-group">
-          <h3><LifeBuoy size={16} aria-hidden="true" /> Help for you</h3>
+          <h3><LifeBuoy size={16} aria-hidden="true" /> Your peer tutors</h3>
           {gettingHelp.length === 0 ? (
             <p className="muted">
-              Score below 50% on a concept check and you’ll be offered help from a classmate who is doing well in that module.
+              Score below 50% on a concept check and you’ll be offered a peer tutor: a classmate who is doing well in that module.
             </p>
           ) : (
             <ul className="peer-list">
@@ -201,11 +210,11 @@ export default function PeerHelp({ matches, profile, onChanged, showGettingHelp 
       )}
 
       <div className="peer-group">
-        <h3><HandHelping size={16} aria-hidden="true" /> {showGettingHelp ? 'Students you could help' : 'Requests for your help'}</h3>
+        <h3><HandHelping size={16} aria-hidden="true" /> {showGettingHelp ? 'Students you could tutor' : 'Requests to tutor'}</h3>
         {helping.length === 0 ? (
           <p className="muted">
             {showGettingHelp
-              ? 'When you’re doing well in a module (75% or more on its concept checks), you may be asked to help a classmate.'
+              ? 'When you’re doing well in a module (75% or more on its concept checks), you may be asked to be a peer tutor.'
               : 'Students who need help in the modules you support will appear here.'}
           </p>
         ) : (
@@ -221,7 +230,7 @@ export default function PeerHelp({ matches, profile, onChanged, showGettingHelp 
           <ul className="link-list">
             {finished.map((m) => (
               <li key={m.matchId}>
-                <span>{m.contact?.fullName ?? 'Peer help'} <span className="muted">{m.myRole === 'student' ? 'helped you' : 'you helped'}</span></span>
+                <span>{m.otherName} <span className="muted">{m.myRole === 'student' ? 'tutored you' : 'you tutored'}</span></span>
                 <span className="module-tag">{m.moduleCode}</span>
               </li>
             ))}
@@ -237,7 +246,7 @@ export default function PeerHelp({ matches, profile, onChanged, showGettingHelp 
             disabled={saving}
             onChange={(e) => toggleAvailability(e.target.checked)}
           />
-          <span>Ask me to help classmates in modules I’m doing well in</span>
+          <span>Ask me to be a peer tutor in modules I’m doing well in</span>
         </label>
       )}
       {error && <Notice tone="error">{error}</Notice>}

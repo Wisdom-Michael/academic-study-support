@@ -62,7 +62,7 @@ export default function MentorDashboard() {
     <>
       <PageHeader
         title="Mentoring"
-        lede="Students who score below 50% in a module you support may be asked whether they’d like your help. Contact details are swapped only once you both accept."
+        lede="Students who score below 50% in a module you support may be offered you as their peer tutor. Phone numbers and emails are swapped only once you both accept."
       />
 
       <div className="stat-row">

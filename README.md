@@ -172,12 +172,13 @@ Runs whenever a student submits a concept check scoring **below 50%**:
    least 75% there, highest first, then the least busy. Skip anyone who has switched off
    "Ask me to help", is already helping 2 people, or was declined for this student before.
 3. If no student is free, fall back to a **volunteer peer mentor** registered for the module.
-4. Insert a `pending` row in `peer_matches` and **notify both people** (the bell in the top bar).
-   Each sees only an anonymous summary: the student sees "Averages 88% on CS201 concept checks",
-   the helper sees "Scored 25% on Big-O".
+4. Insert a `pending` row in `peer_matches` and **notify both people by name** (the bell in the
+   top bar). The struggling student sees "This match is between you and your peer tutor, Chidi Eze"
+   with "Chidi averages 88% on CS201 concept checks"; the peer tutor sees "This match is between you
+   and Tom Hughes" with "Tom scored 25% on Big-O".
 5. Each side **accepts or declines**. Accepting requires a phone number on file. Only when
-   **both** have accepted does the match become `active` and each side see the other's name,
-   email and phone number. Either side can later mark it `completed`.
+   **both** have accepted does the match become `active` and each side see the other's
+   **phone number and email**. Either side can later mark it `completed`.
 6. If the helper declines, the next-best helper is offered automatically and the pairing is
    never suggested again. If the student declines, they aren't offered help in that module
    again until they score below 50% there again.

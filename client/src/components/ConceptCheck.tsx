@@ -22,24 +22,24 @@ function MatchMessage({ result }: { result: GradeResult }) {
   if (match.status === 'created') {
     return (
       <Notice>
-        Your score is below {threshold}%, so we’ve found someone who can help with {moduleCode}
-        {match.helperSummary && <> ({match.helperSummary.charAt(0).toLowerCase() + match.helperSummary.slice(1)})</>} and
-        asked if they’re willing. You’ll both get a notification. Once you’ve both accepted, you’ll see each
-        other’s name and phone number under <Link to="/student#peer-help">Peer help</Link>.
+        Your score is below {threshold}%, so we’ve suggested <strong>{match.helperName ?? 'a classmate'}</strong>
+        {match.helperSummary && <>, who {match.helperSummary.charAt(0).toLowerCase() + match.helperSummary.slice(1)},</>} as
+        your peer tutor for {moduleCode} and asked if they’re willing. You’ll both get a notification. Once you’ve both
+        accepted, you’ll see each other’s phone number and email under <Link to="/student#peer-help">Peer help</Link>.
       </Notice>
     );
   }
   if (match.status === 'already_matched') {
     return (
       <Notice>
-        You already have peer help for {moduleCode}. Bring this chapter to your next session; see{' '}
+        You already have a peer tutor for {moduleCode}. Bring this chapter to your next session; see{' '}
         <Link to="/student#peer-help">Peer help</Link>.
       </Notice>
     );
   }
   return (
     <Notice>
-      Nobody who’s doing well in {moduleCode} is free to help right now. We’ll notify you as soon as someone is.
+      No peer tutor for {moduleCode} is free right now. We’ll notify you as soon as one is.
     </Notice>
   );
 }

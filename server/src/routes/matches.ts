@@ -51,7 +51,10 @@ const MATCH_SELECT = `
     LEFT JOIN user_profiles hp ON hp.user_id = h.user_id`;
 const MATCH_ORDER = `ORDER BY FIELD(pm.match_status, 'pending', 'active', 'completed'), pm.match_id DESC`;
 
-/** The match as one participant sees it: the other person stays anonymous until both accept. */
+/**
+ * The match as one participant sees it. Both names are visible from the start;
+ * phone numbers and emails only once both have accepted.
+ */
 function forViewer(r: MatchRow, viewerId: number) {
   const myRole = r.student_id === viewerId ? 'student' : 'helper';
   const iAccepted = Boolean(myRole === 'student' ? r.student_accepted_at : r.helper_accepted_at);
@@ -67,9 +70,10 @@ function forViewer(r: MatchRow, viewerId: number) {
     myRole,
     iAccepted,
     theyAccepted,
-    // What each side knows before contact details are swapped
+    otherName: other.fullName,
+    // Why this pairing: the tutor's record for the student, the student's score for the tutor
     summary: myRole === 'student'
-      ? r.helper_summary ?? `A peer who can help with ${r.module_code}`
+      ? r.helper_summary ?? `Can tutor you in ${r.module_code}`
       : r.reason ?? `Needs help with ${r.module_code}`,
     contact: revealed ? other : null,
     createdAt: r.created_at,
@@ -82,10 +86,11 @@ async function loadMatch(matchId: number): Promise<MatchRow> {
   return row;
 }
 
-function sideOf(row: MatchRow, userId: number): 'student' | 'helper' {
-  if (row.student_id === userId) return 'student';
-  if (row.helper_id === userId) return 'helper';
-  throw new HttpError(403, 'This match is between two other people.');
+function sideOf(row: MatchRow, user: { userId: number; fullName: string }): 'student' | 'helper' {
+  if (row.student_id === user.userId) return 'student';
+  if (row.helper_id === user.userId) return 'helper';
+  // Usually another tab signed in to a different account
+  throw new HttpError(403, `You're signed in as ${user.fullName}, who isn't part of this match. Reload the page to see your own matches.`);
 }
 
 // GET /api/matches: the signed-in user's matches (as the student needing help, as a helper, or both).
@@ -112,7 +117,7 @@ matchesRouter.post('/:id/respond', async (req, res) => {
   const user = currentUser(req);
   const matchId = idParam(req.params.id);
   const match = await loadMatch(matchId);
-  const side = sideOf(match, user.userId);
+  const side = sideOf(match, user);
   if (match.match_status !== 'pending') throw new HttpError(400, 'This match has already been confirmed.');
 
   const decision = req.body?.decision;
@@ -140,18 +145,20 @@ matchesRouter.post('/:id/respond', async (req, res) => {
     if (updated.student_accepted_at && updated.helper_accepted_at) {
       // Both said yes: confirm the match and tell both who the other person is
       await execute(`UPDATE peer_matches SET match_status = 'active' WHERE match_id = ?`, [matchId]);
-      await notify(updated.student_id, `You're matched for ${updated.module_code}`,
-        `You and ${updated.helper_name} both accepted. Their name and phone number are on your dashboard.`,
+      await notify(updated.student_id, `${updated.helper_name} is your peer tutor for ${updated.module_code}`,
+        `You both accepted. ${updated.helper_name}'s phone number and email are on your dashboard.`,
         '/student#peer-help');
-      await notify(updated.helper_id, `You're matched for ${updated.module_code}`,
-        `You and ${updated.student_name} both accepted. Their name and phone number are on your dashboard.`,
+      await notify(updated.helper_id, `You're tutoring ${updated.student_name} in ${updated.module_code}`,
+        `You both accepted. ${updated.student_name}'s phone number and email are on your dashboard.`,
+        peerHelpLink(updated.helper_role));
+    } else if (side === 'student') {
+      await notify(updated.helper_id, `${updated.student_name} accepted your help`,
+        `${updated.student_name} would like you as their ${updated.module_code} peer tutor. Accept too to swap phone numbers and emails.`,
         peerHelpLink(updated.helper_role));
     } else {
-      const otherId = side === 'student' ? updated.helper_id : updated.student_id;
-      const otherLink = side === 'student' ? peerHelpLink(updated.helper_role) : '/student#peer-help';
-      await notify(otherId, `Waiting for you: peer help in ${updated.module_code}`,
-        `The other ${side === 'student' ? 'student' : 'person'} has accepted. Accept too to swap names and phone numbers.`,
-        otherLink);
+      await notify(updated.student_id, `${updated.helper_name} has agreed to tutor you`,
+        `${updated.helper_name} has accepted being your ${updated.module_code} peer tutor. Accept too to swap phone numbers and emails.`,
+        '/student#peer-help');
     }
     return res.json({ match: forViewer(await loadMatch(matchId), user.userId) });
   }
@@ -176,15 +183,15 @@ matchesRouter.post('/:id/respond', async (req, res) => {
 
     if (side === 'helper') {
       // Offer the student the next-best helper straight away
-      const next = await recommendHelper(match.student_id, match.module_code, match.reason ?? `Needs help with ${match.module_code}`);
+      const next = await recommendHelper(match.student_id, match.module_code, match.reason ?? 'Needs help');
       if (next.status === 'no_helper_available') {
-        await notify(match.student_id, `Peer help for ${match.module_code}`,
-          'The helper we suggested isn’t available. We’ll let you know as soon as someone else is.',
+        await notify(match.student_id, `Peer tutor for ${match.module_code}`,
+          `${match.helper_name} isn’t available to tutor you. We’ll let you know as soon as another peer tutor is.`,
           '/student#peer-help');
       }
     } else {
       await notify(match.helper_id, `No longer needed: ${match.module_code}`,
-        'The student you offered to help has decided not to go ahead. Thanks for offering.',
+        `${match.student_name} has decided not to go ahead with peer tutoring. Thanks for offering.`,
         peerHelpLink(match.helper_role));
     }
     // The helper may have capacity for someone else now
@@ -200,14 +207,14 @@ matchesRouter.post('/:id/complete', async (req, res) => {
   const user = currentUser(req);
   const matchId = idParam(req.params.id);
   const match = await loadMatch(matchId);
-  const side = sideOf(match, user.userId);
+  const side = sideOf(match, user);
   if (match.match_status !== 'active') throw new HttpError(400, 'Only a confirmed match can be marked as finished.');
 
   await execute(`UPDATE peer_matches SET match_status = 'completed' WHERE match_id = ?`, [matchId]);
   const otherId = side === 'student' ? match.helper_id : match.student_id;
   const actorName = side === 'student' ? match.student_name : match.helper_name;
-  await notify(otherId, `Peer help finished: ${match.module_code}`,
-    `${actorName} marked your ${match.module_code} peer help as finished.`,
+  await notify(otherId, `Peer tutoring finished: ${match.module_code}`,
+    `${actorName} marked your ${match.module_code} peer tutoring as finished.`,
     side === 'student' ? peerHelpLink(match.helper_role) : '/student#peer-help');
   // Finishing frees the helper for another student in this module
   await matchWaitingStudents(match.module_code);

@@ -318,9 +318,9 @@ INSERT INTO peer_matches (match_id, student_id, mentor_id, module_code, match_st
   (2, 7, 2, 'CS220', 'active');    -- Grace and Priya both accepted, so they can see each other's details
 
 INSERT INTO match_details (match_id, reason, helper_summary, student_accepted_at, helper_accepted_at, created_at) VALUES
-  (1, 'Scored 25% on “Asymptotic analysis and Big-O notation”', 'Volunteer peer mentor for CS201',
+  (1, 'Scored 25% on “Asymptotic analysis and Big-O notation”', 'Is a volunteer peer mentor for CS201',
       NOW() - INTERVAL 1 DAY, NULL, NOW() - INTERVAL 1 DAY),
-  (2, 'Scored 25% on “Normalisation from 1NF to BCNF”', 'Volunteer peer mentor for CS220',
+  (2, 'Scored 25% on “Normalisation from 1NF to BCNF”', 'Is a volunteer peer mentor for CS220',
       NOW() - INTERVAL 6 DAY, NOW() - INTERVAL 5 DAY, NOW() - INTERVAL 6 DAY);
 
 -- Phone numbers use the UK's reserved fictional range (07700 900xxx)
@@ -333,14 +333,14 @@ INSERT INTO user_profiles (user_id, phone_number, available_to_help) VALUES
   (8, '+44 7700 900108', 1);
 
 INSERT INTO notifications (user_id, title, body, link, is_read, created_at) VALUES
-  (5, 'Peer help for CS201',
-      'A volunteer peer mentor for CS201 can help you. You have accepted; once they accept too, you will see each other''s name and phone number.',
+  (5, 'Priya Raman could be your CS201 peer tutor',
+      'Priya Raman is a volunteer peer mentor for CS201 and could tutor you. Accept to swap phone numbers and emails; they are only shared once you both agree.',
       '/student#peer-help', 1, NOW() - INTERVAL 1 DAY),
-  (2, 'Can you help a CS201 student?',
-      'A CS201 student scored 25% on “Asymptotic analysis and Big-O notation”. Accept to swap names and phone numbers; nothing is shared until you both agree.',
+  (2, 'Fatima Bello accepted your help',
+      'Fatima Bello would like you as their CS201 peer tutor. Accept too to swap phone numbers and emails.',
       '/mentor#peer-help', 0, NOW() - INTERVAL 1 DAY),
-  (7, 'You''re matched for CS220',
-      'You and Priya Raman both accepted. Their name and phone number are on your dashboard.',
+  (7, 'Priya Raman is your peer tutor for CS220',
+      'You both accepted. Priya Raman''s phone number and email are on your dashboard.',
       '/student#peer-help', 1, NOW() - INTERVAL 5 DAY);
 
 INSERT INTO login_events (user_id, logged_in_at) VALUES

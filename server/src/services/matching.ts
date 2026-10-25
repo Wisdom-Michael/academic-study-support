@@ -5,11 +5,13 @@ import { notify, peerHelpLink } from './notifications';
 export interface MatchOutcome {
   status: 'created' | 'already_matched' | 'no_helper_available';
   matchId?: number;
+  helperName?: string;
   helperSummary?: string;
 }
 
 interface HelperCandidate {
   helper_id: number;
+  full_name: string;
   role: 'student' | 'mentor';
   module_score: number | null;
   open_matches: number;
@@ -32,7 +34,7 @@ async function findHelper(studentId: number, moduleCode: string): Promise<Helper
                          WHERE pm.mentor_id = u.user_id AND pm.match_status IN ('pending', 'active'))`;
 
   const [student] = await query<HelperCandidate>(
-    `SELECT u.user_id AS helper_id, 'student' AS role,
+    `SELECT u.user_id AS helper_id, u.full_name, 'student' AS role,
             AVG(mp.score_achieved) AS module_score, ${openMatches} AS open_matches
        FROM users u
        JOIN milestone_progress mp ON mp.student_id = u.user_id AND mp.score_achieved IS NOT NULL
@@ -51,7 +53,7 @@ async function findHelper(studentId: number, moduleCode: string): Promise<Helper
 
   const [mentor] = await query<HelperCandidate & { max_active_matches: number }>(
     `SELECT * FROM (
-        SELECT u.user_id AS helper_id, 'mentor' AS role, NULL AS module_score,
+        SELECT u.user_id AS helper_id, u.full_name, 'mentor' AS role, NULL AS module_score,
                ${openMatches} AS open_matches, mm.max_active_matches
           FROM mentor_modules mm
           JOIN users u ON u.user_id = mm.mentor_id
@@ -69,10 +71,10 @@ async function findHelper(studentId: number, moduleCode: string): Promise<Helper
 }
 
 /**
- * Peer-help recommendation, run when a student scores below the threshold.
+ * Peer-tutor recommendation, run when a student scores below the threshold.
  *
- * Creates a 'pending' match and notifies both people. Neither sees the other's
- * name or phone number until both accept (see routes/matches.ts).
+ * Creates a 'pending' match and notifies both people by name. Phone numbers and
+ * emails are only shared once both accept (see routes/matches.ts).
  */
 export async function recommendHelper(studentId: number, moduleCode: string, reason: string): Promise<MatchOutcome> {
   const [existing] = await query<{ match_id: number }>(
@@ -87,7 +89,7 @@ export async function recommendHelper(studentId: number, moduleCode: string, rea
 
   const helperSummary = helper.role === 'student'
     ? `Averages ${Math.round(Number(helper.module_score))}% on ${moduleCode} concept checks`
-    : `Volunteer peer mentor for ${moduleCode}`;
+    : `Is a volunteer peer mentor for ${moduleCode}`;
 
   const result = await execute(
     `INSERT INTO peer_matches (student_id, mentor_id, module_code, match_status) VALUES (?, ?, ?, 'pending')`,
@@ -98,17 +100,20 @@ export async function recommendHelper(studentId: number, moduleCode: string, rea
     [result.insertId, reason.slice(0, 255), helperSummary],
   );
 
-  await notify(studentId, `Peer help for ${moduleCode}`,
-    `${helper.role === 'student' ? 'A student who is doing well in' : 'A volunteer peer mentor for'} ${moduleCode} can help you. ` +
-    'Accept to swap names and phone numbers. Nothing is shared until you both agree.',
+  const [student] = await query<{ full_name: string }>(`SELECT full_name FROM users WHERE user_id = ?`, [studentId]);
+  const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+  await notify(studentId, `${helper.full_name} could be your ${moduleCode} peer tutor`,
+    `${helper.full_name} ${lowerFirst(helperSummary)} and could tutor you. ` +
+    'Accept to swap phone numbers and emails; they are only shared once you both agree.',
     '/student#peer-help');
-  await notify(helper.helper_id, `Can you help a ${moduleCode} student?`,
-    `A ${moduleCode} student ${reason.charAt(0).toLowerCase()}${reason.slice(1)}. ` +
+  await notify(helper.helper_id, `Can you tutor ${student.full_name}?`,
+    `${student.full_name} ${lowerFirst(reason)} in ${moduleCode}. ` +
     (helper.role === 'student' ? `You're one of the strongest students in ${moduleCode}. ` : '') +
-    'Accept to swap names and phone numbers. Nothing is shared until you both agree.',
+    'Accept to swap phone numbers and emails; they are only shared once you both agree.',
     peerHelpLink(helper.role));
 
-  return { status: 'created', matchId: result.insertId, helperSummary };
+  return { status: 'created', matchId: result.insertId, helperName: helper.full_name, helperSummary };
 }
 
 /**

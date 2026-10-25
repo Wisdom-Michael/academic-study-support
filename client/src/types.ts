@@ -44,6 +44,7 @@ export interface ConceptCheck {
 export interface MatchOutcome {
   status: 'created' | 'already_matched' | 'no_helper_available';
   matchId?: number;
+  helperName?: string;
   helperSummary?: string;
 }
 
@@ -74,10 +75,11 @@ export interface PeerMatch {
   matchId: number;
   moduleCode: string;
   status: MatchStatus;
-  myRole: 'student' | 'helper';   // 'student' = I'm getting help; 'helper' = I'm giving it
+  myRole: 'student' | 'helper';   // 'student' = I'm being tutored; 'helper' = I'm the peer tutor
   iAccepted: boolean;
   theyAccepted: boolean;
-  summary: string;                // what I know about the other person before we both accept
+  otherName: string;              // shown from the start
+  summary: string;                // why this pairing (the tutor's record, or the student's score)
   contact: { fullName: string; email: string; phoneNumber: string | null } | null; // only once both accept
   createdAt: string | null;
 }

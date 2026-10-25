@@ -60,15 +60,15 @@ export default function StudentDashboard() {
         <StatTile tone="plain" icon={Users} label="Peer help"
           value={!mentorsLoaded ? LOADING
             : needsAnswer ? `${needsAnswer} to answer`
-            : helpedBy ? helpedBy.contact?.fullName.split(' ')[0] ?? 'Matched'
+            : helpedBy ? helpedBy.otherName.split(' ')[0]
             : helpOffer ? 'Waiting'
-            : helpingCount ? `Helping ${helpingCount}`
+            : helpingCount ? `Tutoring ${helpingCount}`
             : 'None'}
           detail={!mentorsLoaded ? 'Loading…'
             : needsAnswer ? 'see Peer help below'
-            : helpedBy ? `is helping you with ${helpedBy.moduleCode}`
-            : helpOffer ? `for ${helpOffer.moduleCode}`
-            : helpingCount ? (helpingCount === 1 ? 'classmate' : 'classmates')
+            : helpedBy ? `is your ${helpedBy.moduleCode} peer tutor`
+            : helpOffer ? `${helpOffer.otherName.split(' ')[0]}, ${helpOffer.moduleCode}`
+            : helpingCount ? (helpingCount === 1 ? 'classmate you tutor' : 'classmates you tutor')
             : 'not needed so far'} />
       </div>
 
@@ -127,7 +127,7 @@ export default function StudentDashboard() {
                     );
                   })}
                 </ul>
-                <p className="chart-note"><span className="threshold-key" aria-hidden="true" /> The line marks {PASS_THRESHOLD}%. Scores below it offer you help from a classmate.</p>
+                <p className="chart-note"><span className="threshold-key" aria-hidden="true" /> The line marks {PASS_THRESHOLD}%. Scores below it offer you a peer tutor.</p>
               </>
             )}
           </Card>
