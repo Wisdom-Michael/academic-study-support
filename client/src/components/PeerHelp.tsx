@@ -103,6 +103,12 @@ function MatchItem({ match, profile, onChanged }: { match: PeerMatch; profile: P
 
       <p className="peer-sentence">{matchSentence(match)}</p>
       <PersonCard match={match} />
+      {match.pairedBy && (
+        <div className="paired-by">
+          <p><strong>Paired by {match.pairedBy}</strong></p>
+          {match.lecturerNote && <p className="paired-note">“{match.lecturerNote}”</p>}
+        </div>
+      )}
 
       {error && <Notice tone="error">{error}</Notice>}
 

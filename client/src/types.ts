@@ -81,7 +81,35 @@ export interface PeerMatch {
   otherName: string;              // shown from the start
   summary: string;                // why this pairing (the tutor's record, or the student's score)
   contact: { fullName: string; email: string; phoneNumber: string | null } | null; // only once both accept
+  pairedBy: string | null;        // the lecturer who made the pairing, if one did
+  lecturerNote: string | null;
   createdAt: string | null;
+}
+
+/** A pairing as lecturers see it (every match, names only). */
+export interface LecturerMatch {
+  matchId: number;
+  moduleCode: string;
+  status: MatchStatus;
+  studentName: string;
+  helperName: string;
+  studentAccepted: boolean;
+  helperAccepted: boolean;
+  pairedBy: string | null;
+  lecturerNote: string | null;
+  createdAt: string | null;
+}
+
+/** Someone a lecturer can pair, with how they're doing in the chosen module. */
+export interface PairingPerson {
+  userId: number;
+  fullName: string;
+  role: 'student' | 'mentor';
+  averageScore: number | null;
+  checksTaken: number;
+  currentTutor: string | null;
+  tutoringCount: number;
+  mentorsModule: boolean;
 }
 
 export interface Profile {

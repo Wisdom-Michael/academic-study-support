@@ -6,6 +6,7 @@ import { useLoad } from '../hooks';
 import { CohortOverview, ResolutionStatus, RiskAlert, RiskLevel, StudentRisk, StudentTimeline } from '../types';
 import { ColumnChart, Donut, MeterBar, RingMeter } from '../components/charts';
 import Notice from '../components/Notice';
+import PairStudents from '../components/PairStudents';
 import { Avatar, Card, PageHeader, Pill } from '../components/ui';
 
 const REFRESH_MS = 30_000;
@@ -296,6 +297,11 @@ export default function LecturerDashboard() {
             <li><strong>Inactivity, 20%:</strong> days since their last login or reading, reaching 100 at 14 days.</li>
           </ul>
         </details>
+      </Card>
+
+      <Card title="Pair students" id="pairings"
+        action={<span className="card-meta">Match a student who needs support with a peer tutor</span>}>
+        <PairStudents onPaired={() => overview.reload()} />
       </Card>
 
       <Card title="Early-warning alerts" id="alerts" className="alerts-card"

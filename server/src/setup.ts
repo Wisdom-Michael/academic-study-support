@@ -82,6 +82,23 @@ const MIGRATIONS = [
    )`,
 ];
 
+/** Columns added to existing tables later on: [table, column, definition]. */
+const COLUMN_MIGRATIONS: [string, string, string][] = [
+  // Pairings a lecturer made by hand, and the note they added
+  ['match_details', 'paired_by_id', 'INT NULL'],
+  ['match_details', 'lecturer_note', 'VARCHAR(500) NULL'],
+];
+
+async function addMissingColumns(connection: Connection, database: string): Promise<void> {
+  for (const [table, column, definition] of COLUMN_MIGRATIONS) {
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
+      [database, table, column],
+    );
+    if (Number(rows[0].n) === 0) await connection.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+  }
+}
+
 /**
  * Called once when the server starts:
  *  - an empty database (e.g. a new hosted MySQL) gets the schema and demo data;
@@ -105,6 +122,7 @@ export async function prepareDatabase(): Promise<void> {
     }
     await connection.query(`USE \`${database}\``);
     for (const statement of MIGRATIONS) await connection.query(statement);
+    await addMissingColumns(connection, database);
   } finally {
     await connection.end();
   }

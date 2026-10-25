@@ -186,6 +186,15 @@ Runs whenever a student submits a concept check scoring **below 50%**:
 Students waiting without a helper are matched automatically later, when someone scores 75%+ in
 the module, a mentor adds it, or a match finishes or is declined.
 
+**Lecturer pairings.** On the Student risk dashboard, the **Pair students** card lets a lecturer
+choose a module, a student who needs support (listed with their average, lowest first) and a peer
+tutor (students averaging 75%+ and the module's peer mentors are suggested first), plus an optional
+note. This creates the same kind of `pending` match: both students are notified that the lecturer
+paired them, see "Paired by …" and the note on their card, and must both accept before phone numbers
+and emails are swapped. The lecturer's choice overrides automatic limits such as tutor capacity,
+but a student can't have two open tutors in one module. The lecturer sees each pair's progress
+("Waiting for both", "Waiting for Lukas", "Matched") and is notified when a pairing is accepted or declined.
+
 ### Concept checks from uploaded material (`server/src/services/questionGenerator.ts`)
 
 When someone uploads a material with **Create a concept check** ticked (or presses
@@ -273,6 +282,8 @@ All endpoints except `/api/auth/*` and `/api/health` need an `Authorization: Bea
 | GET / POST / DELETE | `/api/mentor-modules` | Mentor | Modules the mentor supports |
 | GET | `/api/analytics/risk` | Lecturer | Recompute risk index for all students |
 | GET | `/api/analytics/students/:id` | Lecturer | One student's activity timeline |
+| GET | `/api/analytics/pairing-options?module=` | Lecturer | Students and peer mentors with their average in the module, current tutor and tutoring load |
+| POST | `/api/analytics/pairings` | Lecturer | `{ moduleCode, studentId, tutorId, note? }`: pair two students (both must accept) |
 | GET / PATCH | `/api/analytics/alerts` | Lecturer | List alerts / change their status |
 
 ---

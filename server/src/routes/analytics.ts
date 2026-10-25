@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { execute, query } from '../db';
-import { requireRole } from '../middleware/auth';
+import { currentUser, requireRole } from '../middleware/auth';
+import { pairByLecturer } from '../services/matching';
 import { computeStudentRisks, syncRiskAlerts } from '../services/risk';
 import { HttpError, ResolutionStatus, RiskLevel } from '../types';
-import { idParam } from '../validation';
+import { idParam, requireModuleCode } from '../validation';
 
 // /api/analytics: faculty/admin only
 const router = Router();
@@ -107,6 +108,68 @@ router.get('/students/:id', async (req, res) => {
     })),
     loginsLast30Days: logins.map((l) => l.logged_in_at),
   });
+});
+
+// GET /api/analytics/pairing-options?module=CS201: who the lecturer can pair in a module
+router.get('/pairing-options', async (req, res) => {
+  const modules = (await query<{ module_code: string }>(
+    `SELECT DISTINCT module_code FROM course_materials ORDER BY module_code`,
+  )).map((m) => m.module_code);
+  const moduleCode = typeof req.query.module === 'string' ? req.query.module.trim().toUpperCase() : '';
+  if (!moduleCode) return res.json({ modules, people: [] });
+  if (!modules.includes(moduleCode)) throw new HttpError(404, `There are no materials for ${moduleCode}.`);
+
+  const people = await query<{
+    user_id: number; full_name: string; role: string; avg_score: number | null; checks: number;
+    current_tutor: string | null; tutoring: number; mentors_module: number;
+  }>(
+    `SELECT u.user_id, u.full_name, u.role,
+            (SELECT AVG(mp.score_achieved) FROM milestone_progress mp
+               JOIN course_materials cm ON cm.material_id = mp.material_id AND cm.module_code = ?
+              WHERE mp.student_id = u.user_id AND mp.score_achieved IS NOT NULL) AS avg_score,
+            (SELECT COUNT(*) FROM milestone_progress mp
+               JOIN course_materials cm ON cm.material_id = mp.material_id AND cm.module_code = ?
+              WHERE mp.student_id = u.user_id AND mp.score_achieved IS NOT NULL) AS checks,
+            (SELECT t.full_name FROM peer_matches pm JOIN users t ON t.user_id = pm.mentor_id
+              WHERE pm.student_id = u.user_id AND pm.module_code = ? AND pm.match_status IN ('pending', 'active')
+              LIMIT 1) AS current_tutor,
+            (SELECT COUNT(*) FROM peer_matches pm
+              WHERE pm.mentor_id = u.user_id AND pm.match_status IN ('pending', 'active')) AS tutoring,
+            (SELECT COUNT(*) FROM mentor_modules mm WHERE mm.mentor_id = u.user_id AND mm.module_code = ?) AS mentors_module
+       FROM users u
+      WHERE u.role IN ('student', 'mentor')
+      ORDER BY u.full_name`,
+    [moduleCode, moduleCode, moduleCode, moduleCode],
+  );
+
+  res.json({
+    modules,
+    moduleCode,
+    people: people.map((p) => ({
+      userId: p.user_id,
+      fullName: p.full_name,
+      role: p.role,
+      averageScore: p.avg_score === null ? null : Math.round(Number(p.avg_score)),
+      checksTaken: Number(p.checks),
+      currentTutor: p.current_tutor,
+      tutoringCount: Number(p.tutoring),
+      mentorsModule: Number(p.mentors_module) > 0,
+    })),
+  });
+});
+
+// POST /api/analytics/pairings { moduleCode, studentId, tutorId, note? }: lecturer pairs two students
+router.post('/pairings', async (req, res) => {
+  const moduleCode = requireModuleCode(req.body);
+  const note = typeof req.body?.note === 'string' && req.body.note.trim() ? req.body.note.trim().slice(0, 500) : null;
+  const { matchId } = await pairByLecturer({
+    lecturer: currentUser(req),
+    studentId: idParam(req.body?.studentId, 'Student'),
+    tutorId: idParam(req.body?.tutorId, 'Peer tutor'),
+    moduleCode,
+    note,
+  });
+  res.status(201).json({ matchId });
 });
 
 // GET /api/analytics/alerts

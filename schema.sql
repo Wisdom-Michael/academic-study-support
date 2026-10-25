@@ -148,6 +148,8 @@ CREATE TABLE match_details (
   student_accepted_at TIMESTAMP NULL,
   helper_accepted_at  TIMESTAMP NULL,
   created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  paired_by_id        INT NULL,            -- the lecturer who made the pairing (NULL = suggested automatically)
+  lecturer_note       VARCHAR(500) NULL,   -- optional note from that lecturer, shown to both students
   CONSTRAINT fk_details_match FOREIGN KEY (match_id) REFERENCES peer_matches (match_id) ON DELETE CASCADE
 );
 

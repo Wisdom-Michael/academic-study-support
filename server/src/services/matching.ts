@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { execute, query } from '../db';
+import { HttpError } from '../types';
 import { notify, peerHelpLink } from './notifications';
 
 export interface MatchOutcome {
@@ -91,17 +92,8 @@ export async function recommendHelper(studentId: number, moduleCode: string, rea
     ? `Averages ${Math.round(Number(helper.module_score))}% on ${moduleCode} concept checks`
     : `Is a volunteer peer mentor for ${moduleCode}`;
 
-  const result = await execute(
-    `INSERT INTO peer_matches (student_id, mentor_id, module_code, match_status) VALUES (?, ?, ?, 'pending')`,
-    [studentId, helper.helper_id, moduleCode],
-  );
-  await execute(
-    `INSERT INTO match_details (match_id, reason, helper_summary) VALUES (?, ?, ?)`,
-    [result.insertId, reason.slice(0, 255), helperSummary],
-  );
-
+  const matchId = await insertMatch({ studentId, helperId: helper.helper_id, moduleCode, reason, helperSummary });
   const [student] = await query<{ full_name: string }>(`SELECT full_name FROM users WHERE user_id = ?`, [studentId]);
-  const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
   await notify(studentId, `${helper.full_name} could be your ${moduleCode} peer tutor`,
     `${helper.full_name} ${lowerFirst(helperSummary)} and could tutor you. ` +
@@ -113,7 +105,104 @@ export async function recommendHelper(studentId: number, moduleCode: string, rea
     'Accept to swap phone numbers and emails; they are only shared once you both agree.',
     peerHelpLink(helper.role));
 
-  return { status: 'created', matchId: result.insertId, helperName: helper.full_name, helperSummary };
+  return { status: 'created', matchId, helperName: helper.full_name, helperSummary };
+}
+
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** Create a 'pending' match and its details row. */
+async function insertMatch(m: {
+  studentId: number; helperId: number; moduleCode: string; reason: string; helperSummary: string;
+  pairedById?: number; lecturerNote?: string | null;
+}): Promise<number> {
+  const result = await execute(
+    `INSERT INTO peer_matches (student_id, mentor_id, module_code, match_status) VALUES (?, ?, ?, 'pending')`,
+    [m.studentId, m.helperId, m.moduleCode],
+  );
+  await execute(
+    `INSERT INTO match_details (match_id, reason, helper_summary, paired_by_id, lecturer_note) VALUES (?, ?, ?, ?, ?)`,
+    [result.insertId, m.reason.slice(0, 255), m.helperSummary.slice(0, 255), m.pairedById ?? null, m.lecturerNote ?? null],
+  );
+  return result.insertId;
+}
+
+/** A user's average concept-check score in one module, or null if they haven't taken any there. */
+async function moduleAverage(userId: number, moduleCode: string): Promise<number | null> {
+  const [row] = await query<{ avg_score: number | null }>(
+    `SELECT AVG(mp.score_achieved) AS avg_score
+       FROM milestone_progress mp
+       JOIN course_materials cm ON cm.material_id = mp.material_id AND cm.module_code = ?
+      WHERE mp.student_id = ? AND mp.score_achieved IS NOT NULL`,
+    [moduleCode, userId],
+  );
+  return row?.avg_score === null || row?.avg_score === undefined ? null : Math.round(Number(row.avg_score));
+}
+
+/**
+ * A lecturer pairs a student who needs support with a peer tutor of their choosing.
+ * It works like an automatic suggestion (a 'pending' match both must accept), but the
+ * lecturer's choice overrides the automatic limits such as the tutor's capacity.
+ */
+export async function pairByLecturer(p: {
+  lecturer: { userId: number; fullName: string };
+  studentId: number;
+  tutorId: number;
+  moduleCode: string;
+  note: string | null;
+}): Promise<{ matchId: number }> {
+  if (p.studentId === p.tutorId) throw new HttpError(400, 'Choose two different people.');
+
+  const people = await query<{ user_id: number; full_name: string; role: string }>(
+    `SELECT user_id, full_name, role FROM users WHERE user_id IN (?, ?)`, [p.studentId, p.tutorId],
+  );
+  const student = people.find((u) => u.user_id === p.studentId);
+  const tutor = people.find((u) => u.user_id === p.tutorId);
+  if (!student || student.role !== 'student') throw new HttpError(400, 'Choose a student who needs support.');
+  if (!tutor || (tutor.role !== 'student' && tutor.role !== 'mentor')) {
+    throw new HttpError(400, 'The peer tutor must be a student or a peer mentor.');
+  }
+
+  const [existing] = await query<{ tutor_name: string }>(
+    `SELECT u.full_name AS tutor_name FROM peer_matches pm JOIN users u ON u.user_id = pm.mentor_id
+      WHERE pm.student_id = ? AND pm.module_code = ? AND pm.match_status IN ('pending', 'active') LIMIT 1`,
+    [p.studentId, p.moduleCode],
+  );
+  if (existing) {
+    throw new HttpError(409, `${student.full_name} already has a peer tutor for ${p.moduleCode} (${existing.tutor_name}).`);
+  }
+
+  // What each side is told about the other
+  const studentAverage = await moduleAverage(p.studentId, p.moduleCode);
+  const tutorAverage = await moduleAverage(p.tutorId, p.moduleCode);
+  const [mentorsModule] = await query<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM mentor_modules WHERE mentor_id = ? AND module_code = ?`, [p.tutorId, p.moduleCode],
+  );
+  const reason = studentAverage !== null
+    ? `Averages ${studentAverage}% on ${p.moduleCode} concept checks`
+    : `Needs support in ${p.moduleCode}`;
+  const helperSummary = tutorAverage !== null
+    ? `Averages ${tutorAverage}% on ${p.moduleCode} concept checks`
+    : Number(mentorsModule?.n) > 0
+      ? `Is a volunteer peer mentor for ${p.moduleCode}`
+      : `Was chosen by ${p.lecturer.fullName} to tutor you`;
+
+  const matchId = await insertMatch({
+    studentId: p.studentId, helperId: p.tutorId, moduleCode: p.moduleCode, reason, helperSummary,
+    pairedById: p.lecturer.userId, lecturerNote: p.note,
+  });
+
+  const noteLine = p.note ? ` Note from ${p.lecturer.fullName}: “${p.note}”` : '';
+  const consent = ' Accept to swap phone numbers and emails; they are only shared once you both agree.';
+  await notify(p.studentId, `${p.lecturer.fullName} paired you with a peer tutor`,
+    `${p.lecturer.fullName} has paired you with ${tutor.full_name} for ${p.moduleCode}. ` +
+    `${tutor.full_name.split(' ')[0]} ${lowerFirst(helperSummary)}.${noteLine}${consent}`,
+    '/student#peer-help');
+  await notify(p.tutorId, `${p.lecturer.fullName} asked you to tutor ${student.full_name}`,
+    `${p.lecturer.fullName} has paired you with ${student.full_name} for ${p.moduleCode} and would like you to be their peer tutor.` +
+    `${noteLine}${consent}`,
+    peerHelpLink(tutor.role));
+
+  return { matchId };
 }
 
 /**

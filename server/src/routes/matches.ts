@@ -34,6 +34,9 @@ interface MatchRow {
   helper_email: string;
   helper_phone: string | null;
   helper_role: Role;
+  paired_by_id: number | null;
+  paired_by_name: string | null;
+  lecturer_note: string | null;
 }
 
 const MATCH_SELECT = `
@@ -42,13 +45,15 @@ const MATCH_SELECT = `
          s.user_id AS student_id, s.full_name AS student_name, s.institutional_email AS student_email,
          sp.phone_number AS student_phone,
          h.user_id AS helper_id, h.full_name AS helper_name, h.institutional_email AS helper_email,
-         hp.phone_number AS helper_phone, h.role AS helper_role
+         hp.phone_number AS helper_phone, h.role AS helper_role,
+         md.paired_by_id, pb.full_name AS paired_by_name, md.lecturer_note
     FROM peer_matches pm
     LEFT JOIN match_details md ON md.match_id = pm.match_id
     JOIN users s ON s.user_id = pm.student_id
     JOIN users h ON h.user_id = pm.mentor_id
     LEFT JOIN user_profiles sp ON sp.user_id = s.user_id
-    LEFT JOIN user_profiles hp ON hp.user_id = h.user_id`;
+    LEFT JOIN user_profiles hp ON hp.user_id = h.user_id
+    LEFT JOIN users pb ON pb.user_id = md.paired_by_id`;
 const MATCH_ORDER = `ORDER BY FIELD(pm.match_status, 'pending', 'active', 'completed'), pm.match_id DESC`;
 
 /**
@@ -76,8 +81,15 @@ function forViewer(r: MatchRow, viewerId: number) {
       ? r.helper_summary ?? `Can tutor you in ${r.module_code}`
       : r.reason ?? `Needs help with ${r.module_code}`,
     contact: revealed ? other : null,
+    pairedBy: r.paired_by_name,      // set when a lecturer made the pairing
+    lecturerNote: r.lecturer_note,
     createdAt: r.created_at,
   };
+}
+
+/** Let the lecturer who made a pairing know how it went. */
+async function notifyPairingLecturer(r: MatchRow, title: string, body: string) {
+  if (r.paired_by_id) await notify(r.paired_by_id, title, body, '/lecturer#pairings');
 }
 
 async function loadMatch(matchId: number): Promise<MatchRow> {
@@ -103,6 +115,8 @@ matchesRouter.get('/', async (req, res) => {
       matches: rows.map((r) => ({
         matchId: r.match_id, moduleCode: r.module_code, status: r.match_status,
         studentName: r.student_name, helperName: r.helper_name,
+        studentAccepted: Boolean(r.student_accepted_at), helperAccepted: Boolean(r.helper_accepted_at),
+        pairedBy: r.paired_by_name, lecturerNote: r.lecturer_note, createdAt: r.created_at,
       })),
     });
   }
@@ -151,6 +165,8 @@ matchesRouter.post('/:id/respond', async (req, res) => {
       await notify(updated.helper_id, `You're tutoring ${updated.student_name} in ${updated.module_code}`,
         `You both accepted. ${updated.student_name}'s phone number and email are on your dashboard.`,
         peerHelpLink(updated.helper_role));
+      await notifyPairingLecturer(updated, `Pairing accepted: ${updated.module_code}`,
+        `${updated.student_name} and ${updated.helper_name} both accepted your pairing and can now contact each other.`);
     } else if (side === 'student') {
       await notify(updated.helper_id, `${updated.student_name} accepted your help`,
         `${updated.student_name} would like you as their ${updated.module_code} peer tutor. Accept too to swap phone numbers and emails.`,
@@ -180,6 +196,11 @@ matchesRouter.post('/:id/respond', async (req, res) => {
     } finally {
       connection.release();
     }
+
+    await notifyPairingLecturer(match, `Pairing declined: ${match.module_code}`,
+      `${side === 'student' ? match.student_name : match.helper_name} declined your pairing of ` +
+      `${match.student_name} with ${match.helper_name}.` +
+      (side === 'helper' ? ' The student will be offered another peer tutor if one is free.' : ''));
 
     if (side === 'helper') {
       // Offer the student the next-best helper straight away
