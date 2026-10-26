@@ -10,6 +10,13 @@ conceptual learning. It does **not** include coding sandboxes, compilers, or IDE
 | **C. Concept checks & peer matching** | Multiple-choice and true/false checks at the end of each chapter, graded instantly. Uploading a material can generate a 5–20 question check from it automatically. A score below 50% automatically creates a pending peer-mentor match for that module. |
 | **D. Risk analytics** | Lecturers see a live risk index for every student, built from login frequency, chapter completion, concept-check scores, and inactivity. Medium- and high-risk students raise early-warning alerts automatically. |
 
+**Live demo:** <https://study-support-r7do.onrender.com>. It runs on free hosting, so the first
+visit after a quiet spell can take a minute or two while the server wakes up. The demo
+accounts are listed [below](#demo-accounts).
+
+Guides to the source code: [server/README.md](server/README.md) (API and business rules) and
+[client/README.md](client/README.md) (React app).
+
 ---
 
 To put the site online for free (Render + Aiven), follow [DEPLOYMENT.md](DEPLOYMENT.md).
@@ -40,25 +47,29 @@ academic-study-support/
 ├── schema.sql                  MySQL tables and seed data
 ├── .env.example                Template for database, port and JWT settings
 ├── package.json                Runs both tiers together (npm run dev)
-├── server/                     Middle tier: Express REST API
+├── render.yaml                 Hosting settings for Render
+├── server/                     Middle tier: Express REST API (see server/README.md)
 │   ├── src/
-│   │   ├── index.ts            App setup, route mounting, error handling
+│   │   ├── index.ts            App setup, rate limits, route mounting, error handling
 │   │   ├── config.ts           Environment variables and business-rule constants
 │   │   ├── db.ts               MySQL connection pool and query helpers
-│   │   ├── middleware/auth.ts  JWT verification and role checks (RBAC)
-│   │   ├── routes/             auth, materials, conceptChecks, matches, analytics
+│   │   ├── setup.ts            Seeds an empty database and adds missing tables and columns
+│   │   ├── middleware/         JWT verification, role checks (RBAC) and rate limiting
+│   │   ├── routes/             auth, materials, conceptChecks, matches, profile, analytics
 │   │   ├── services/
-│   │   │   ├── matching.ts     Peer-mentorship matching algorithm
-│   │   │   └── risk.ts         Student risk index and alert generation
+│   │   │   ├── matching.ts     Peer-tutor matching and lecturer pairings
+│   │   │   ├── risk.ts         Student risk index and alert generation
+│   │   │   ├── questionGenerator.ts  Concept checks generated from uploads with Claude
+│   │   │   └── notifications.ts  In-app notifications
 │   │   └── scripts/initDb.ts   Creates and seeds the database from schema.sql
-│   └── uploads/                Uploaded course files (seed/ holds the demo chapters)
-└── client/                     Presentation tier: React app
+│   └── uploads/seed/           The four demo chapters (new uploads are stored in the database)
+└── client/                     Presentation tier: React app (see client/README.md)
     └── src/
         ├── App.tsx             Routes and role-based route protection
         ├── auth.tsx            Sign-in state shared across the app
         ├── api.ts              fetch wrapper that attaches the JWT
         ├── pages/              Login, Register, the three dashboards, Repository, MaterialReader
-        └── components/         ConceptCheck, QuestionEditor, ProgressMark, UploadForm, …
+        └── components/         ConceptCheck, PeerHelp, PairStudents, UploadForm, charts, …
 ```
 
 ---
@@ -152,12 +163,13 @@ account, the page says which type to choose.
 
 1. Sign in as **Lukas** and open *Recursion and the call stack* (CS201). Scroll through it and
    watch the progress ring fill. Then answer the concept check badly on purpose (under 50%).
-   The result explains each answer and says he's been matched with a CS201 mentor.
-2. Sign in as **Daniel Mensah**. Lukas's request is waiting, because Daniel had the fewest open
-   matches among CS201 mentors. Accept it.
-3. Sign back in as **Lukas**. His dashboard now shows Daniel's contact details.
-4. Sign in as **Dr. Okafor** with **Lecturer** selected. The risk table updates within 30 seconds. Open
-   *Course materials*, open a chapter, and add a question with the editor under the concept check.
+   The result explains each answer and names a suggested peer tutor: a classmate averaging
+   75%+ in CS201 or, if none is free, a CS201 peer mentor. Accept, entering a phone number.
+2. Sign in as that tutor (the bell shows the request) and accept too.
+3. Sign back in as **Lukas**. Now that both have accepted, each sees the other's phone number and email.
+4. Sign in as **Dr. Okafor** with **Lecturer** selected. The risk table updates within 30 seconds.
+   Use **Pair students** to pair two students yourself, then open *Course materials*, open a
+   chapter, and add a question with the editor under the concept check.
 
 ---
 
@@ -299,10 +311,14 @@ All endpoints except `/api/auth/*` and `/api/health` need an `Authorization: Bea
 - Sign-in checks the chosen account type only after the password is verified, so it reveals
   nothing about an account to someone without its password.
 - Uploads are limited to PDF, Markdown, text, Word and PowerPoint files up to 20 MB, and are
-  saved under random names inside `server/uploads`.
+  stored in the `material_files` table.
+- Sign-in is limited to 10 attempts per 15 minutes and registration to 5 per hour, per IP address.
 - Concept-check answers stay on the server until submission.
+- Phone numbers and emails are shared only after both people accept a match.
 - For simplicity the JWT is kept in `localStorage`. A production deployment would use an
-  HTTP-only cookie and add rate limiting on the sign-in endpoint.
+  HTTP-only cookie.
+- The demo password `Study@2026` is public. Change `DEMO_PASSWORD` before sharing a copy
+  with real users.
 
 ## Troubleshooting
 
