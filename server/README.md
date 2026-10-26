@@ -30,6 +30,7 @@ src/
 ├── types.ts            Shared types (roles, match and alert statuses) and HttpError
 ├── validation.ts       Input checks: required text, module codes, numeric IDs
 ├── uploads.ts          Reads uploaded files from the database or the seed folder
+├── fileTypes.ts        Identifies uploads by their contents (so .ppsx or extension-less PowerPoints work)
 ├── middleware/
 │   ├── auth.ts         Signs and verifies JWTs; requireAuth and requireRole (RBAC)
 │   └── rateLimit.ts    Per-IP limit on sign-in and registration attempts

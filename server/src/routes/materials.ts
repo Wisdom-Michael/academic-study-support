@@ -6,6 +6,7 @@ import multer from 'multer';
 import { ResultSetHeader } from 'mysql2/promise';
 import { config } from '../config';
 import { execute, pool, query } from '../db';
+import { detectFileType, MIME_TYPES } from '../fileTypes';
 import { currentUser, requireRole } from '../middleware/auth';
 import { HttpError } from '../types';
 import { DB_PREFIX, extensionOf, readMaterialFile, resolveUploadPath } from '../uploads';
@@ -14,25 +15,12 @@ import { idParam, requireModuleCode, requireText } from '../validation';
 const router = Router();
 
 // ---------------------------------------------------------------------
-// File uploads: held in memory, then saved to the material_files table
+// File uploads: held in memory, then saved to the material_files table.
+// The type is checked from the file's contents once it arrives (fileTypes.ts).
 // ---------------------------------------------------------------------
-const ALLOWED_EXTENSIONS = ['.pdf', '.md', '.txt', '.docx', '.pptx'];
-const MIME_TYPES: Record<string, string> = {
-  '.pdf': 'application/pdf',
-  '.md': 'text/markdown; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-};
-
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.maxUploadBytes },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_EXTENSIONS.includes(ext)) cb(null, true);
-    else cb(new HttpError(400, `Upload a ${ALLOWED_EXTENSIONS.join(', ')} file.`));
-  },
 });
 
 
@@ -136,7 +124,7 @@ router.post('/', upload.single('file'), async (req, res) => {
   if (!file) throw new HttpError(400, 'Choose a file to upload.');
   const title = requireText(req.body, 'title', 'Title', 200);
   const moduleCode = requireModuleCode(req.body);
-  const ext = extensionOf(file.originalname);
+  const ext = await detectFileType(file.originalname, file.buffer);
   // A random name, so stored paths never clash; the extension says how to read the file
   const filePath = `${DB_PREFIX}${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
 

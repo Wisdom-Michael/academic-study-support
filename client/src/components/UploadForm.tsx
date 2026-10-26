@@ -14,6 +14,17 @@ interface UploadFormProps {
 
 type Step = 'form' | 'uploading' | 'generating';
 
+// Extensions for desktop file pickers, MIME types for phone pickers (which often filter by type).
+// Old .ppt/.doc are listed so choosing one gets the server's "save it as .pptx" message.
+const ACCEPTED_FILES = [
+  '.pdf', '.docx', '.pptx', '.ppsx', '.potx', '.md', '.markdown', '.txt', '.ppt', '.doc',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+  'text/plain', 'text/markdown',
+].join(',');
+
 export default function UploadForm({ knownModules, onUploaded, onCancel }: UploadFormProps) {
   const [title, setTitle] = useState('');
   const [moduleCode, setModuleCode] = useState('');
@@ -103,12 +114,12 @@ export default function UploadForm({ knownModules, onUploaded, onCancel }: Uploa
         <span>File</span>
         <input
           type="file"
-          accept=".pdf,.md,.txt,.docx,.pptx"
+          accept={ACCEPTED_FILES}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           aria-describedby="file-hint"
           required
         />
-        <small id="file-hint">PDF, Word, PowerPoint, Markdown or text, up to 20 MB. Markdown and text files track reading progress automatically.</small>
+        <small id="file-hint">PDF, Word (.docx), PowerPoint (.pptx or .ppsx), Markdown or text, up to 20 MB. Save old .ppt and .doc files as .pptx or .docx first. Markdown and text files track reading progress automatically.</small>
       </label>
 
       <div className="generate-option">
